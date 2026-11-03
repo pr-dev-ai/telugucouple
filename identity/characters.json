@@ -2,13 +2,31 @@
   "satyam": {
     "label": "Satyam",
     "gender": "male",
-    "age": [35, 65],
-    "refs": ["hero.png", "s01_front_neutral.png", "s04_threequarter_l.png", "s08_fullbody_front.png"]
+    "age": [
+      35,
+      65
+    ],
+    "refs": [
+      "face_ref.png",
+      "hero.png",
+      "s01_front_neutral.png",
+      "s04_threequarter_l.png",
+      "s08_fullbody_front.png"
+    ]
   },
   "padma": {
     "label": "Padma",
     "gender": "female",
-    "age": [18, 40],
-    "refs": ["hero.png", "s01_front_neutral.png", "s05_threequarter_r.png", "s08_fullbody_front.png"]
+    "age": [
+      18,
+      40
+    ],
+    "refs": [
+      "face_ref.png",
+      "hero.png",
+      "s01_front_neutral.png",
+      "s05_threequarter_r.png",
+      "s08_fullbody_front.png"
+    ]
   }
 }

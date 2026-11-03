@@ -55,28 +55,134 @@ def cuts(path, start, dur):
     return shots
 
 
-def gate(path, who="couple"):
-    g = subprocess.run([sys.executable, str(HERE / "face_gate.py"), "check", "--who", who, str(path)], capture_output=True, text=True)
+STILL_SANITY = 0.40   # a raw couple still only has to be the right two people (wrong face/gender scores < 0.3); FaceFusion then puts the exact faces in
+
+
+def gate(path, who="couple", min_=None):
+    cmd = [sys.executable, str(HERE / "face_gate.py"), "check", "--who", who, str(path)] + (["--min", str(min_)] if min_ else [])
+    g = subprocess.run(cmd, capture_output=True, text=True)
     line = (g.stdout.strip().splitlines() or ["?"])[-1]
     return g.returncode == 0, line
 
 
+PHONE = ("lit only by the light sources visible in the room, with the same colour temperature, soft shadows and light falloff spilling onto "
+         "skin and clothes, never evenly studio-lit or flash-lit. Background slightly out of focus like a phone video frame, a little sensor "
+         "noise, real candid handheld phone video at home, nothing glossy or cinematic. Absolutely no text, captions, stickers, logos or watermarks.")
+STILL_RES = "2K"   # couple stills: two full-body people at 1K give ~60 px faces; 2K doubles that for $0.02 more
+NREF = 5   # identity reference images per person in a still prompt (face crop, hero, front, 3/4, full body)
+
+
+def refs2(who):
+    return ch.refs(who)[:NREF]
+
+
 def couple_prompt(look, glam, light, order, anchor):
+    """One-shot: both people in one edit. Images: Satyam x NREF, Padma x NREF, [anchor], room plate, reference frame (last)."""
     left, right = ("Satyam", "Padma") if order == "satyam-left" else ("Padma", "Satyam")
-    anchor_txt = ("One image shows the same two people earlier in this same video: keep EXACTLY the same garments, fabric, colours, "
-                  "jewellery, hairstyles and room as in that image. " if anchor else "")
-    return (f"Two people, a married couple, in ONE frame. The man in the first four images is Satyam: identical face, bald head, grey beard, belly. "
-            f"The woman in the next four images is Padma: identical face and body. {anchor_txt}"
-            f"The place is EXACTLY the empty room shown in one of the images: same walls, floor, furniture, window and door. "
-            f"Recreate the exact camera framing, crop, both poses, body angles and the lighting direction of the LAST image, but it is THEM, "
-            f"not the people in the last image: {left} stands where the left person is and {right} where the right person is. "
+    n = NREF
+    k = 2 * n + 1
+    anchor_txt = (f"Image {k} shows the same two people earlier in this same video: keep EXACTLY the same garments, fabric, colours, "
+                  f"jewellery, hairstyles and room as in that image. " if anchor else "")
+    plate_i = k + (1 if anchor else 0)
+    return (f"Two people, a married couple, in ONE frame. Images 1-{n} show the man, Satyam: his face must be identical to those images "
+            f"(bald head, black moustache, belly). Images {n+1}-{2*n} show the woman, Padma: her face must be identical to those images. "
+            f"Do not mix the two faces. {anchor_txt}"
+            f"Image {plate_i} is the empty room: the place is EXACTLY that room, same walls, floor, furniture, window and door. "
+            f"Recreate the exact camera framing, crop, both poses, body angles and the lighting direction of the LAST image, but it is THEM (the faces in the last image are blurred on purpose; "
+            f"take only the poses and framing from it): {left} stands where the left person is and {right} where the right person is. "
             f"Their look: {look}. He wears {ch.CLOTHES['satyam']} She wears {ch.CLOTHES['padma']} "
             f"{(ch.GLAM['padma'] + ' ' + ch.GLAM['satyam'] + ' ') if glam else ''}"
-            f"{ch.LIGHT[light]}, lit only by the light sources visible in the room, with the same colour temperature, soft shadows and light "
-            f"falloff spilling onto their skin and clothes, never evenly studio-lit or flash-lit. Background slightly out of focus like a phone "
-            f"video frame, a little sensor noise, real candid handheld phone video of a couple dancing at home, nothing glossy or cinematic. "
-            f"Exactly two people, both faces frontal or three-quarter and clearly visible, hands visible. Absolutely no text, captions, stickers, "
-            f"logos or watermarks. {ch.FACE_TXT['satyam']} {ch.FACE_TXT['padma']} {ch.BODY_TXT['satyam']} {ch.BODY_TXT['padma']}")
+            f"{ch.LIGHT[light]}, {PHONE} Exactly two people, both faces frontal or three-quarter and clearly visible, hands visible. "
+            f"{ch.FACE_TXT['satyam']} {ch.FACE_TXT['padma']} {ch.BODY_TXT['satyam']} {ch.BODY_TXT['padma']}")
+
+
+def seq_prompts(look, glam, light, order, anchor):
+    """Sequential: step 1 puts the first person alone in the room, step 2 adds the second person into that photo.
+    Step 1 images: first x NREF, [anchor], plate, frame. Step 2 images: step-1 still, second x NREF, frame."""
+    first, second = ("satyam", "padma") if order == "satyam-left" else ("padma", "satyam")
+    side = {first: "left", second: "right"}
+    n = NREF
+    lab = {"satyam": "Satyam (the man: bald head, black moustache, belly)", "padma": "Padma (the woman)"}
+    wear = {"satyam": f"He wears {ch.CLOTHES['satyam']} {ch.GLAM['satyam'] if glam else ''}",
+            "padma": f"She wears {ch.CLOTHES['padma']} {ch.GLAM['padma'] if glam else ''}"}
+    anchor_txt = (f"Image {n+1} shows the same person earlier in this same video: keep EXACTLY the same garments, colours, jewellery, "
+                  f"hairstyle and room as in that image. " if anchor else "")
+    plate_i = n + 1 + (1 if anchor else 0)
+    p1 = (f"Images 1-{n} show {lab[first]}: the face must be identical to those images. {anchor_txt}"
+          f"Image {plate_i} is the empty room: the place is EXACTLY that room. The LAST image is a video frame with two people whose faces are blurred on purpose (use it only for pose, framing and position): "
+          f"put ONLY {first.capitalize()} in the room, standing exactly where the {side[first]} person stands, copying that person's pose, "
+          f"body angle, crop and camera framing; the {side[second]} person's spot stays EMPTY (just the room). "
+          f"The look: {look}. {wear[first]} {ch.LIGHT[light]}, {PHONE} One person only. {ch.FACE_TXT[first]} {ch.BODY_TXT[first]}")
+    p2 = (f"Image 1 is a photo of {first.capitalize()} in a room: keep it pixel-identical (same person, same face, same clothes, same room, "
+          f"same framing, same lighting), do not re-render it. Images 2-{n+1} show {lab[second]}: the face must be identical to those images. "
+          f"Add {second.capitalize()} into image 1, standing on the {side[second]} side exactly where the {side[second]} person stands in the "
+          f"LAST image (faces blurred on purpose; use it only for pose and position), copying that person's pose and body angle, at the same scale and lighting as {first.capitalize()}, feet on the same floor. "
+          f"The look: {look}. {wear[second]} Both faces frontal or three-quarter and clearly visible. Exactly two people. {PHONE} "
+          f"{ch.FACE_TXT[second]} {ch.BODY_TXT[second]}")
+    return first, second, p1, p2
+
+
+def mask_faces(frame):
+    """Pixelate every face in the reference frame (frame_x.jpg -> frame_x_nf.jpg) so the edit model copies pose and framing only,
+    never the reference people's faces (3 Nov: unmasked frames pulled both identities down to ~0.5)."""
+    import cv2, face_gate
+    frame = pathlib.Path(frame); out = frame.with_name(frame.stem + "_nf" + frame.suffix)
+    if out.exists(): return out
+    img = cv2.imread(str(frame))
+    for f in face_gate.app().get(img):
+        x0, y0, x1, y1 = [int(v) for v in f.bbox]; w, h = x1 - x0, y1 - y0
+        x0, y0, x1, y1 = max(0, x0 - w // 3), max(0, y0 - h // 2), min(img.shape[1], x1 + w // 3), min(img.shape[0], y1 + h // 4)
+        roi = img[y0:y1, x0:x1]
+        if roi.size:
+            small = cv2.resize(roi, (max(1, (x1 - x0) // 16), max(1, (y1 - y0) // 16)), interpolation=cv2.INTER_LINEAR)
+            img[y0:y1, x0:x1] = cv2.resize(small, (x1 - x0, y1 - y0), interpolation=cv2.INTER_NEAREST)
+    cv2.imwrite(str(out), img); return out
+
+
+def restore_passes(who=None):
+    """FaceFusion passes for a job: both people (gender/age filtered) or one person."""
+    if who:
+        return [{"source": f"identity/{who}/v1/hero.png", "mode": "one"}]
+    return [{"source": f"identity/{w}/v1/hero.png", "mode": "many", "gender": ch.CHARS[w]["gender"], "age": ch.CHARS[w]["age"]} for w in ch.WHO]
+
+
+def still_fix(still, who=None, wait=600):
+    """Put the exact faces into a still with FaceFusion on the GPU worker (worker.bat on the PC): still.png -> still_fx.png.
+    Returns the fixed path, or None when no worker answered in `wait` s (then the raw still is used)."""
+    still = pathlib.Path(still).resolve(); rel = still.relative_to(ROOT); out = still.with_name(still.stem + "_fx" + still.suffix)
+    if out.exists(): return out
+    job = ROOT / "jobs" / f"{still.parent.name}_{still.stem}_fix.json"
+    if not job.exists():
+        job.write_text(json.dumps({"type": "face_restore", "target": str(rel).replace("\\", "/"), "output": str(rel.with_name(out.name)).replace("\\", "/"),
+                                   "passes": restore_passes(who), "enhancer_blend": 60}, indent=1))
+    t0 = time.time()
+    while time.time() - t0 < wait:
+        if job.with_suffix(".done").exists() and out.exists(): return out
+        if job.with_suffix(".err").exists(): print("still fix ERR:", job.with_suffix(".err").read_text()[-300:]); return None
+        time.sleep(5)
+    print("still fix: no worker answered in", wait, "s (start D:\\telugucouple\\worker.bat); using the raw still"); return None
+
+
+def make_couple_still(fal_client, still, frame, plate, look, glam, light, order, anchor_path, mode, note):
+    """Writes `still` (both people, framing from `frame`, in room `plate`). mode = oneshot | seq. Returns nothing; caller gates."""
+    up = fal_client.upload_file
+    frame = mask_faces(frame)
+    anchor = [up(str(anchor_path))] if anchor_path else []
+    if mode == "oneshot":
+        ids = [up(str(p)) for p in refs2("satyam") + refs2("padma")]
+        r = fal_client.subscribe(EDIT_EP, arguments={"thinking_level": "minimal", "aspect_ratio": "9:16", "resolution": STILL_RES, "num_images": 1,
+            "output_format": "png", "image_urls": ids + anchor + [up(str(plate)), up(str(frame))],
+            "prompt": couple_prompt(look, glam, light, order, bool(anchor))})
+        fetch(r["images"][0]["url"], still); fal_cost.spend(EDIT_EP, 1, note)
+    else:
+        first, second, p1, p2 = seq_prompts(look, glam, light, order, bool(anchor))
+        step1 = still.with_name(still.stem + "_step1.png")
+        r = fal_client.subscribe(EDIT_EP, arguments={"thinking_level": "minimal", "aspect_ratio": "9:16", "resolution": STILL_RES, "num_images": 1,
+            "output_format": "png", "image_urls": [up(str(p)) for p in refs2(first)] + anchor + [up(str(plate)), up(str(frame))], "prompt": p1})
+        fetch(r["images"][0]["url"], step1); fal_cost.spend(EDIT_EP, 1, note + "_step1")
+        r = fal_client.subscribe(EDIT_EP, arguments={"thinking_level": "minimal", "aspect_ratio": "9:16", "resolution": STILL_RES, "num_images": 1,
+            "output_format": "png", "image_urls": [up(str(step1))] + [up(str(p)) for p in refs2(second)] + [up(str(frame))], "prompt": p2})
+        fetch(r["images"][0]["url"], still); fal_cost.spend(EDIT_EP, 1, note + "_step2")
 
 
 def solo_still(fal_client, couple_still, who, out):
@@ -113,13 +219,12 @@ def submit(a):
     for s_, e_ in shots:        # Kling MC accepts 3-30 s per request; a 422 (bad input) CAN be billed, a 5xx is not
         assert 3.0 <= (e_ - s_) <= 30.0, f"shot {s_:.1f}-{e_:.1f} is {e_-s_:.2f}s, Kling needs 3-30 s (merge or re-cut)"
     os.environ["FAL_KEY"] = mc.load_key(); import fal_client
-    ids = [fal_client.upload_file(str(p)) for p in ch.refs("satyam") + ch.refs("padma")]
-    plate = fal_client.upload_file(str(ch.set_plate(a.set)))
+    plate = ch.set_plate(a.set)
     rq = out / "requests.json"
     reqs = json.load(open(rq)) if rq.exists() else {"endpoint": MC_EP}
     plan = json.load(open(out / "shots.json")) if (out / "shots.json").exists() else []
     looks = [x.strip() for x in a.look.split("||")]
-    meta = {"route": a.route, "set": a.set, "order": a.order, "split": a.split, "light": a.light, "look": a.look}
+    meta = {"route": a.route, "set": a.set, "order": a.order, "split": a.split, "light": a.light, "look": a.look, "still_mode": a.still_mode}
     json.dump(meta, open(out / "meta.json", "w"), indent=1)
     for i, (s, e) in enumerate(shots, 1):
         look = looks[min(i - 1, len(looks) - 1)]
@@ -135,17 +240,19 @@ def submit(a):
         # ---- the couple still, gated on BOTH faces ----
         for attempt in range(3):
             if still.exists():
-                ok, line = gate(still); print(tag, "gate:", line)
+                ok, line = gate(still, min_=STILL_SANITY); print(tag, "sanity gate:", line)
                 if ok: break
-                still.rename(still.with_name(f"{still.stem}_fail{attempt}{still.suffix}"))   # no delete permission in the VM
-            anchor = [fal_client.upload_file(str(first))] if (i > 1 and first.exists() and a.anchor) else []
-            r = fal_client.subscribe(EDIT_EP, arguments={"thinking_level": "minimal", "aspect_ratio": "9:16", "resolution": "1K",
-                "num_images": 1, "output_format": "png", "image_urls": ids + anchor + [plate, fal_client.upload_file(str(frame))],
-                "prompt": couple_prompt(look, a.glam, a.light, a.order, bool(anchor))})
-            fetch(r["images"][0]["url"], still); fal_cost.spend(EDIT_EP, 1, f"{a.name}_{tag}")
-        ok, line = gate(still)
+                still.rename(still.with_name(f"{still.stem}_fail{attempt}{still.suffix}"))
+            anchor_path = first if (i > 1 and first.exists() and a.anchor) else None
+            make_couple_still(fal_client, still, frame, plate, look, a.glam, a.light, a.order, anchor_path, a.still_mode, f"{a.name}_{tag}")
+        ok, line = gate(still, min_=STILL_SANITY)
         if not ok and not a.force:
-            print(tag, "STILL FAILS THE COUPLE GATE after 3 tries, not animated:", line, "(--force to animate anyway)"); continue
+            print(tag, "STILL FAILS THE SANITY GATE after 3 tries, not animated:", line, "(--force to animate anyway)"); continue
+        if a.fix:                                   # exact faces in before Kling sees it
+            fx = still_fix(still)
+            if fx:
+                ok2, line2 = gate(fx); print(tag, "fixed still gate:", line2)
+                if ok2: still = fx
         im = __import__("cv2").imread(str(still)); assert im is not None and min(im.shape[:2]) >= 720, f"{still.name} under 720 px (Kling 422 risk)"
         # ---- animate ----
         if a.route == "mc":
@@ -169,7 +276,10 @@ def submit(a):
                 if key in reqs: continue
                 solo = out / f"still_{tag}{side}.png"; segm = out / f"ref_{tag}{side}.mp4"
                 if not solo.exists(): solo_still(fal_client, still, who, solo)
-                ok1, line1 = gate(solo, who); print(tag + side, "gate:", line1)
+                ok1, line1 = gate(solo, who, min_=STILL_SANITY); print(tag + side, "sanity gate:", line1)
+                if ok1 and a.fix:
+                    fx = still_fix(solo, who)
+                    if fx and gate(fx, who)[0]: solo = fx
                 if not ok1 and not a.force: print(tag + side, "solo still fails the gate, skipped (--force to animate anyway)"); continue
                 masked_ref(seg, segm, a.split, keep_left=(side == "L"))
                 h = fal_client.submit(MC_EP, arguments={"video_url": fal_client.upload_file(str(segm)), "image_url": fal_client.upload_file(str(solo)),
@@ -184,6 +294,22 @@ def submit(a):
         print(tag, f"{e-s:.1f}s submitted ({a.route})", flush=True)
     mult = 2 if a.route == "split" else 1
     print(f"total {a.dur:.0f}s, about ${a.dur*0.07*mult + len(shots)*0.054*(1+2*(a.route=='split')):.2f}. Next: python poll.py {out}")
+
+
+def still_test(a):
+    """Make N couple stills from one frame without animating, to eyeball and gate before any Kling money:
+       python make_multishot.py still <frame.jpg> --name test --set hall_a --n 2 --still-mode seq --look "..."  -> reels/<date>_<name>/cand_<mode>_<i>.png"""
+    out = ROOT / "reels" / f"{time.strftime('%Y-%m-%d')}_{a.name}"; out.mkdir(parents=True, exist_ok=True)
+    os.environ["FAL_KEY"] = mc.load_key(); import fal_client
+    plate = ch.set_plate(a.set)
+    for i in range(1, a.n + 1):
+        still = out / f"cand_{a.still_mode}_{i}.png"
+        if still.exists(): continue
+        make_couple_still(fal_client, still, pathlib.Path(a.ref), plate, a.look, a.glam, a.light, a.order, None, a.still_mode, f"{a.name}_cand{i}")
+        ok, line = gate(still, min_=STILL_SANITY); print(still.name, "sanity:", line, flush=True)
+        if ok and a.fix:
+            fx = still_fix(still)
+            if fx: print(fx.name, "fixed:", gate(fx)[1], flush=True)
 
 
 def restore(d):
@@ -245,7 +371,10 @@ def join(d):
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(); ap.add_argument("cmd", choices=["submit", "restore", "join"]); ap.add_argument("path")
+    ap = argparse.ArgumentParser(); ap.add_argument("cmd", choices=["submit", "still", "restore", "join"]); ap.add_argument("path")
+    ap.add_argument("--still-mode", default="seq", choices=["oneshot", "seq"], help="couple still: both in one edit, or one person then add the other")
+    ap.add_argument("--n", type=int, default=2, help="still: how many candidates")
+    ap.add_argument("--no-fix", dest="fix", action="store_false", help="skip the FaceFusion face fix of each still (needs worker.bat)")
     ap.add_argument("--name"); ap.add_argument("--start", type=float, default=0); ap.add_argument("--dur", type=float, default=15)
     ap.add_argument("--look", default="she in a bright saree, he in banian and lungi")
     ap.add_argument("--set", default="hall_a", choices=list(ch.SETS)); ap.add_argument("--light", default="evening", choices=list(ch.LIGHT))
@@ -258,5 +387,6 @@ if __name__ == "__main__":
     ap.add_argument("--frame", default="", help="comma list: time in the trimmed ref to take each shot's still frame from; -1 = default s+0.3")
     ap.add_argument("--slow", type=float, default=1.0, help="1.2 = play the reference 20%% slower (longer reel)")
     a = ap.parse_args()
-    {"submit": lambda: submit(argparse.Namespace(ref=a.path, **{k: v for k, v in vars(a).items() if k not in ("cmd", "path")})),
+    ns = lambda: argparse.Namespace(ref=a.path, **{k: v for k, v in vars(a).items() if k not in ("cmd", "path")})
+    {"submit": lambda: submit(ns()), "still": lambda: still_test(ns()),
      "restore": lambda: restore(a.path), "join": lambda: join(a.path)}[a.cmd]()

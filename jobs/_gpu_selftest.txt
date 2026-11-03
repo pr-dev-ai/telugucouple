@@ -1,0 +1,47 @@
+PASS: 2 s clip took 41 s (GPU target < 90 s)
+, execution_providers=['cuda']]
+processing:  30%|===       | 15/50 [00:09<00:09,  3.55frame/s, execution_providers=['cuda']]
+processing:  32%|===       | 16/50 [00:09<00:08,  4.00frame/s, execution_providers=['cuda']]
+processing:  34%|===       | 17/50 [00:10<00:08,  3.84frame/s, execution_providers=['cuda']]
+processing:  36%|===       | 18/50 [00:10<00:08,  3.96frame/s, execution_providers=['cuda']]
+processing:  38%|===       | 19/50 [00:10<00:07,  3.98frame/s, execution_providers=['cuda']]
+processing:  40%|====      | 20/50 [00:10<00:07,  4.00frame/s, execution_providers=['cuda']]
+processing:  42%|====      | 21/50 [00:11<00:07,  4.00frame/s, execution_providers=['cuda']]
+processing:  44%|====      | 22/50 [00:11<00:06,  4.00frame/s, execution_providers=['cuda']]
+processing:  46%|====      | 23/50 [00:11<00:06,  4.04frame/s, execution_providers=['cuda']]
+processing:  48%|====      | 24/50 [00:11<00:06,  4.03frame/s, execution_providers=['cuda']]
+processing:  50%|=====     | 25/50 [00:12<00:06,  3.81frame/s, execution_providers=['cuda']]
+processing:  52%|=====     | 26/50 [00:12<00:05,  4.10frame/s, execution_providers=['cuda']]
+processing:  54%|=====     | 27/50 [00:12<00:06,  3.67frame/s, execution_providers=['cuda']]
+processing:  56%|=====     | 28/50 [00:12<00:05,  3.98frame/s, execution_providers=['cuda']]
+processing:  58%|=====     | 29/50 [00:13<00:05,  3.72frame/s, execution_providers=['cuda']]
+processing:  60%|======    | 30/50 [00:13<00:04,  4.44frame/s, execution_providers=['cuda']]
+processing:  62%|======    | 31/50 [00:13<00:04,  3.91frame/s, execution_providers=['cuda']]
+processing:  64%|======    | 32/50 [00:13<00:04,  4.32frame/s, execution_providers=['cuda']]
+processing:  66%|======    | 33/50 [00:14<00:04,  3.92frame/s, execution_providers=['cuda']]
+processing:  68%|======    | 34/50 [00:14<00:03,  4.63frame/s, execution_providers=['cuda']]
+processing:  70%|=======   | 35/50 [00:14<00:03,  4.03frame/s, execution_providers=['cuda']]
+processing:  72%|=======   | 36/50 [00:14<00:02,  4.78frame/s, execution_providers=['cuda']]
+processing:  74%|=======   | 37/50 [00:15<00:03,  4.05frame/s, execution_providers=['cuda']]
+processing:  76%|=======   | 38/50 [00:15<00:02,  4.78frame/s, execution_providers=['cuda']]
+processing:  78%|=======   | 39/50 [00:15<00:02,  4.12frame/s, execution_providers=['cuda']]
+processing:  80%|========  | 40/50 [00:15<00:02,  4.87frame/s, execution_providers=['cuda']]
+processing:  82%|========  | 41/50 [00:15<00:02,  4.19frame/s, execution_providers=['cuda']]
+processing:  84%|========  | 42/50 [00:16<00:01,  4.88frame/s, execution_providers=['cuda']]
+processing:  86%|========  | 43/50 [00:16<00:01,  4.19frame/s, execution_providers=['cuda']]
+processing:  88%|========  | 44/50 [00:16<00:01,  4.94frame/s, execution_providers=['cuda']]
+processing:  90%|========= | 45/50 [00:16<00:01,  4.30frame/s, execution_providers=['cuda']]
+processing:  92%|========= | 46/50 [00:16<00:00,  4.92frame/s, execution_providers=['cuda']]
+processing:  94%|========= | 47/50 [00:17<00:00,  4.28frame/s, execution_providers=['cuda']]
+processing:  96%|========= | 48/50 [00:17<00:00,  4.93frame/s, execution_providers=['cuda']]
+processing:  98%|========= | 49/50 [00:17<00:00,  4.24frame/s, execution_providers=['cuda']]
+processing: 100%|==========| 50/50 [00:17<00:00,  4.96frame/s, execution_providers=['cuda']]
+processing: 100%|==========| 50/50 [00:17<00:00,  2.80frame/s, execution_providers=['cuda']]
+[FACEFUSION.FFMPEG] Stream map '' matches no streams.
+[FACEFUSION.FFMPEG] To ignore this, add a trailing '?' to the map.
+[FACEFUSION.FFMPEG] Failed to set value '1:a:0' for option 'map': Invalid argument
+[FACEFUSION.FFMPEG] Error parsing options for output file D:\telugucouple\out\gpu_test_out.mp4.
+[FACEFUSION.FFMPEG] Error opening output files: Invalid argument
+[FACEFUSION.TO_VIDEO] restoring audio skipped
+[FACEFUSION.TO_VIDEO] processing to video succeeded in 23.12 seconds
+[FACEFUSION.CORE] clearing temporary resources

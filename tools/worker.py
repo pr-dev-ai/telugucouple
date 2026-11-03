@@ -35,7 +35,7 @@ def gpu_selftest():
     if "CUDAExecutionProvider" not in chk.stdout:
         (JOBS / "_gpu_selftest.txt").write_text("FAIL: onnxruntime has no CUDAExecutionProvider\n" + chk.stdout + chk.stderr); print("GPU self-test FAIL (no CUDA provider)"); return False
     t0 = time.time()
-    r = subprocess.run([sys.executable, str(ROOT/"tools/ff_launch.py"), "headless-run", "--source-paths", str(ROOT/"identity/v1/hero.png"), "--target-path", str(clip),
+    r = subprocess.run([sys.executable, str(ROOT/"tools/ff_launch.py"), "headless-run", "--source-paths", str(ROOT/"identity/satyam/v1/hero.png"), "--target-path", str(clip),
                         "--output-path", str(out), "--processors", "face_swapper", "face_enhancer", "--execution-providers", "cuda", "--video-memory-strategy", "tolerant", "--execution-thread-count", "2", "--log-level", "debug"],
                        cwd=FF, capture_output=True, text=True)
     dt = time.time() - t0; log = r.stdout + r.stderr
@@ -137,7 +137,7 @@ print('CPU:'); run(['CPUExecutionProvider'])
             if j["type"] == "gpu_watch":
                 # run FaceFusion on the 2 s clip and sample nvidia-smi while it runs: is the RTX 3050 actually busy?
                 clip = ROOT/"out/gpu_test_2s.mp4"; outp = ROOT/"out/gpu_watch_out.mp4"
-                pr = subprocess.Popen([sys.executable, str(ROOT/"tools/ff_launch.py"), "headless-run", "--source-paths", str(ROOT/"identity/v1/hero.png"),
+                pr = subprocess.Popen([sys.executable, str(ROOT/"tools/ff_launch.py"), "headless-run", "--source-paths", str(ROOT/"identity/satyam/v1/hero.png"),
                       "--target-path", str(clip), "--output-path", str(outp), "--processors", "face_swapper", "face_enhancer",
                       "--execution-providers", "cuda", "--video-memory-strategy", "tolerant", "--execution-thread-count", "2", "--log-level", "debug"], cwd=FF, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
                 samples = []

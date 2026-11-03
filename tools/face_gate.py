@@ -100,7 +100,12 @@ def faces_of(img_bgr, min_px=None):
     return out
 
 
+MIN_OVERRIDE = None     # --min X: one threshold for every face (sanity check of a raw couple still before FaceFusion fixes the faces)
+
+
 def thr_for(w):
+    if MIN_OVERRIDE is not None:
+        return MIN_OVERRIDE
     return THRESHOLD_SMALL if w < SMALL_FACE_PX else THRESHOLD
 
 
@@ -248,7 +253,9 @@ if __name__ == "__main__":
     ap.add_argument("cmd", choices=["init", "check", "video", "calibrate"])
     ap.add_argument("--who", required=True, choices=ch.WHO + ["couple"])
     ap.add_argument("paths", nargs="*")
-    a = ap.parse_args()
+    ap.add_argument("--min", type=float, help="check: use this one threshold for every face (sanity gate before the FaceFusion still fix)")
+    a = ap.parse_intermixed_args()      # allows: check --who couple a.png b.png
+    MIN_OVERRIDE = a.min
     if a.cmd == "init":
         init(a.who)
     elif a.cmd == "check":
