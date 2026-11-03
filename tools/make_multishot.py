@@ -177,9 +177,10 @@ def make_couple_still(fal_client, still, frame, plate, look, glam, light, order,
     else:
         first, second, p1, p2 = seq_prompts(look, glam, light, order, bool(anchor))
         step1 = still.with_name(still.stem + "_step1.png")
-        r = fal_client.subscribe(EDIT_EP, arguments={"thinking_level": "minimal", "aspect_ratio": "9:16", "resolution": STILL_RES, "num_images": 1,
+        if step1.exists(): r = None      # resume: step 1 already paid for
+        else: r = fal_client.subscribe(EDIT_EP, arguments={"thinking_level": "minimal", "aspect_ratio": "9:16", "resolution": STILL_RES, "num_images": 1,
             "output_format": "png", "image_urls": [up(str(p)) for p in refs2(first)] + anchor + [up(str(plate)), up(str(frame))], "prompt": p1})
-        fetch(r["images"][0]["url"], step1); fal_cost.spend(EDIT_EP, 1, note + "_step1")
+        if r: fetch(r["images"][0]["url"], step1); fal_cost.spend(EDIT_EP, 1, note + "_step1")
         r = fal_client.subscribe(EDIT_EP, arguments={"thinking_level": "minimal", "aspect_ratio": "9:16", "resolution": STILL_RES, "num_images": 1,
             "output_format": "png", "image_urls": [up(str(step1))] + [up(str(p)) for p in refs2(second)] + [up(str(frame))], "prompt": p2})
         fetch(r["images"][0]["url"], still); fal_cost.spend(EDIT_EP, 1, note + "_step2")
@@ -211,7 +212,9 @@ def submit(a):
     sh("ffmpeg", "-v", "error", "-y", "-ss", str(a.start), "-t", str(a.dur / a.slow), "-i", a.ref,
        "-vf", f"scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280{sp}", "-r", "24", "-an", "-c:v", "libx264", "-crf", "18", str(ref))
     a.dur = dur_of(ref)
-    if a.cuts:
+    if a.cuts == "none":
+        shots = [(0.0, a.dur)]
+    elif a.cuts:
         cs = [float(x) * a.slow for x in a.cuts.split(",")]; e = [0.0] + cs + [a.dur]; shots = list(zip(e, e[1:]))
     else:
         shots = cuts(ref, 0, a.dur)

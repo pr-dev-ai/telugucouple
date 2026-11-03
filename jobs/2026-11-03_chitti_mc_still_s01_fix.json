@@ -1,0 +1,26 @@
+{
+ "type": "face_restore",
+ "target": "reels/2026-11-03_chitti_mc/still_s01.png",
+ "output": "reels/2026-11-03_chitti_mc/still_s01_fx.png",
+ "passes": [
+  {
+   "source": "identity/satyam/v1/hero.png",
+   "mode": "many",
+   "gender": "male",
+   "age": [
+    35,
+    65
+   ]
+  },
+  {
+   "source": "identity/padma/v1/hero.png",
+   "mode": "many",
+   "gender": "female",
+   "age": [
+    18,
+    40
+   ]
+  }
+ ],
+ "enhancer_blend": 60
+}

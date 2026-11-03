@@ -1,0 +1,9 @@
+{
+ "route": "split",
+ "set": "hall_a",
+ "order": "satyam-left",
+ "split": 0.5,
+ "light": "evening",
+ "look": "she in a bright magenta pink saree draped low with the waist showing and a deep-neck sleeveless blouse, jasmine in the plait; he in a faded grey round-neck T-shirt and a blue checked lungi, barefoot",
+ "still_mode": "seq"
+}

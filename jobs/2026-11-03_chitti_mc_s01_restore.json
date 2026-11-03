@@ -1,0 +1,25 @@
+{
+ "type": "face_restore",
+ "target": "reels/2026-11-03_chitti_mc/src_2026-11-03_chitti_mc_s01.mp4",
+ "output": "reels/2026-11-03_chitti_mc/restored_s01.mp4",
+ "passes": [
+  {
+   "source": "identity/satyam/v1/hero.png",
+   "mode": "many",
+   "gender": "male",
+   "age": [
+    35,
+    65
+   ]
+  },
+  {
+   "source": "identity/padma/v1/hero.png",
+   "mode": "many",
+   "gender": "female",
+   "age": [
+    18,
+    40
+   ]
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "type": "face_restore",
+ "target": "reels/2026-11-03_chitti_split/src_2026-11-03_chitti_split_s01R.mp4",
+ "output": "reels/2026-11-03_chitti_split/restored_s01R.mp4",
+ "passes": [
+  {
+   "source": "identity/padma/v1/hero.png",
+   "mode": "one"
+  }
+ ]
+}

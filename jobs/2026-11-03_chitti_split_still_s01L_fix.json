@@ -1,0 +1,12 @@
+{
+ "type": "face_restore",
+ "target": "reels/2026-11-03_chitti_split/still_s01L.png",
+ "output": "reels/2026-11-03_chitti_split/still_s01L_fx.png",
+ "passes": [
+  {
+   "source": "identity/satyam/v1/hero.png",
+   "mode": "one"
+  }
+ ],
+ "enhancer_blend": 60
+}
