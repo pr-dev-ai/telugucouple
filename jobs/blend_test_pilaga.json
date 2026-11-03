@@ -1,0 +1,1 @@
+{"type":"cmd","timeout":900,"cmd":"cd /d D:\\telugucouple\\reels\\2026-11-03_pilaga_solo && python D:\\telugucouple\\tools\\blend.py joined.mp4 blended.mp4 --strength 0.45 --bg-blur 2.5"}

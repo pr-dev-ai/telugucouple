@@ -1,0 +1,1 @@
+{"type":"cmd","timeout":60,"cmd":"powershell -NoProfile -Command \"Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'ffmpeg.exe' -and $_.CommandLine -like '*blended.mp4*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force; Write-Output ('killed ' + $_.ProcessId) }\""}

@@ -1,0 +1,1 @@
+{"type":"cmd","timeout":120,"cmd":"ffmpeg -v error -i D:\\telugucouple\\reels\\2026-11-03_pilaga_solo\\blended.mp4 -f null - 2>&1 | find /c \"Invalid\" & certutil -hashfile D:\\telugucouple\\reels\\2026-11-03_pilaga_solo\\blended.mp4 MD5"}

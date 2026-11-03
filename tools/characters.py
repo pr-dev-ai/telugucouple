@@ -90,3 +90,22 @@ def set_plate(name):
     if not p.exists():
         raise SystemExit(f"set plate missing: {p}  (python make_sets.py {name})")
     return p
+
+
+# ---- close-range room plates (3 Nov fix for "background does not blend") ----
+# The wide plates show the whole room; a half-body or close dance shot needs the room as a phone sees it from ~1.5-2 m:
+# a smaller part of the room, larger in frame, naturally a little soft. Made by editing the wide plate so the room stays the same.
+CLOSE_OF = {f"{k}_close": k for k in ("hall_a", "hall_b", "bedroom_a", "bedroom_b", "kitchen_a", "balcony_a", "dining_a")}
+CLOSE_PROMPT = ("The same room as the image, same walls, furniture, colours and light, but photographed with a phone main camera held at "
+                "chest height by someone standing about 2 metres from the far wall/furniture, so only the middle part of the room fills the frame "
+                "and everything looks larger and closer; the background is naturally a little soft like a phone photo focused on someone standing "
+                "in front of it. Empty room, no people, no text. Real phone photo, slight sensor noise, 9:16 vertical.")
+
+# How the person must be lit so she sits IN the room (pasted into every still prompt)
+LIGHT_MATCH = ("She is lit ONLY by this room's own light, exactly like the room: same white balance, same exposure, same softness. "
+               "If a bright window or balcony door is behind her she is softly backlit: a rim of light on her hair and shoulders, her front a "
+               "little darker than the window, never front-lit by a flash or ring light. Her skin and clothes are never brighter, warmer or more "
+               "saturated than the room around her. Shadows fall the same way as the room's shadows, her feet cast a soft contact shadow on the floor.")
+CAMERA_MATCH = ("Re-photograph the room from where the phone stands in the LAST image: the same camera height, the same distance to the dancer "
+                "and the same lens, so the room appears at the scale it really would behind a person at that distance (closer framing = less "
+                "room, larger, slightly soft). Never paste her in front of a far-away wide room view.")

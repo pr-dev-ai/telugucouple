@@ -6,6 +6,8 @@ shot's framing inside the flat, animate, face-restore, join.
   python poll.py ../reels/<date>_<name>                       # downloads motion_*.mp4 / i2v_*.mp4 (verified)
   python make_multishot.py restore ../reels/<date>_<name>     # queues FaceFusion jobs (two passes for two-person clips)
   python make_multishot.py join ../reels/<date>_<name>        # merges split halves if any, concats shots -> joined.mp4
+  python make_multishot.py blend ../reels/<date>_<name>       # GPU blend pass -> blended.mp4 (person sits in the room)
+  python finish.py ../reels/<date>_<name> --who padma --audio <ref.mp4> --offset 0   # gate + realism export + song -> post.mp4
 
 Routes (--route), decided by the bake-off:
   mc     Kling Motion Control with the couple still + the full reference (Kling copies only the LARGEST dancer's motion)
@@ -112,12 +114,12 @@ def seq_prompts(look, glam, light, order, anchor):
           f"Image {plate_i} is the empty room: the place is EXACTLY that room. The LAST image is a video frame with two people whose faces are blurred on purpose (use it only for pose, framing and position): "
           f"put ONLY {first.capitalize()} in the room, standing exactly where the {side[first]} person stands, copying that person's pose, "
           f"body angle, crop and camera framing; the {side[second]} person's spot stays EMPTY (just the room). "
-          f"The look: {look}. {wear[first]} {ch.LIGHT[light]}, {PHONE} One person only. {ch.FACE_TXT[first]} {ch.BODY_TXT[first]}")
+          f"The look: {look}. {wear[first]} {ch.CAMERA_MATCH} {ch.LIGHT[light]}. {ch.LIGHT_MATCH} {PHONE} One person only. {ch.FACE_TXT[first]} {ch.BODY_TXT[first]}")
     p2 = (f"Image 1 is a photo of {first.capitalize()} in a room: keep it pixel-identical (same person, same face, same clothes, same room, "
           f"same framing, same lighting), do not re-render it. Images 2-{n+1} show {lab[second]}: the face must be identical to those images. "
           f"Add {second.capitalize()} into image 1, standing on the {side[second]} side exactly where the {side[second]} person stands in the "
           f"LAST image (faces blurred on purpose; use it only for pose and position), copying that person's pose and body angle, at the same scale and lighting as {first.capitalize()}, feet on the same floor. "
-          f"The look: {look}. {wear[second]} Both faces frontal or three-quarter and clearly visible. Exactly two people. {PHONE} "
+          f"The look: {look}. {wear[second]} {ch.LIGHT_MATCH.replace('She is', 'The added person is')} Both faces frontal or three-quarter and clearly visible. Exactly two people. {PHONE} "
           f"{ch.FACE_TXT[second]} {ch.BODY_TXT[second]}")
     return first, second, p1, p2
 
@@ -192,6 +194,24 @@ SOLO_HOT = ("Bold glamorous trending-reel styling: saree or half-saree draped lo
             "no wardrobe malfunction. The styling must not change her face shape, eyes, nose or jawline at all.")
 
 
+def framing(frame):
+    """'close' when the reference is a half-body / close shot (largest face wider than 9% of the frame), else 'wide'."""
+    import cv2, face_gate
+    img = cv2.imread(str(frame)); fs = face_gate.app().get(img)
+    if not fs: return "wide"
+    fw = max(f.bbox[2] - f.bbox[0] for f in fs)
+    return "close" if fw / img.shape[1] > 0.09 else "wide"
+
+
+def pick_plate(name, frame):
+    """The room plate for this shot: <name>_close for close framings when it exists, else the wide plate."""
+    fr = framing(frame)
+    close = ch.ROOT / "sets" / f"{name}_close.png"
+    p = close if (fr == "close" and close.exists()) else ch.set_plate(name)
+    print(f"  framing {fr} -> plate {p.name}", flush=True)
+    return p, fr
+
+
 def make_solo_still(fal_client, still, frame, plate, who, look, glam, light, anchor_path, note):
     """One person (solo reel) in the flat, copying the reference frame's framing and pose. Images: who x NREF, [anchor], plate, frame (last)."""
     up = fal_client.upload_file
@@ -206,7 +226,7 @@ def make_solo_still(fal_client, still, frame, plate, who, look, glam, light, anc
               f"Image {plate_i} is the empty room: the place is EXACTLY that room, same walls, floor, furniture, window and door. "
               f"The LAST image is a video frame whose face is blurred on purpose: recreate its exact camera framing, crop, pose, body angle and "
               f"lighting direction, but it is HER/HIM from images 1-{n}, not the person in the last image. Look: {look}. {styl} "
-              f"{ch.LIGHT[light]}, {PHONE} Face frontal or three-quarter and clearly visible, hands visible. One person only. "
+              f"{ch.CAMERA_MATCH} {ch.LIGHT[light]}. {ch.LIGHT_MATCH} {PHONE} Face frontal or three-quarter and clearly visible, hands visible. One person only. "
               f"{ch.FACE_TXT[who]} {ch.BODY_TXT[who]}")
     r = fal_client.subscribe(EDIT_EP, arguments={"thinking_level": "minimal", "aspect_ratio": "9:16", "resolution": STILL_RES, "num_images": 1,
         "output_format": "png", "image_urls": [up(str(x)) for x in refs2(who)] + anchor + [up(str(plate)), up(str(frame))], "prompt": prompt})
@@ -249,7 +269,7 @@ def submit(a):
     for s_, e_ in shots:        # Kling MC accepts 3-30 s per request; a 422 (bad input) CAN be billed, a 5xx is not
         assert 3.0 <= (e_ - s_) <= 30.0, f"shot {s_:.1f}-{e_:.1f} is {e_-s_:.2f}s, Kling needs 3-30 s (merge or re-cut)"
     os.environ["FAL_KEY"] = mc.load_key(); import fal_client
-    plate = ch.set_plate(a.set)
+    ch.set_plate(a.set)                       # fail early if the room does not exist
     rq = out / "requests.json"
     reqs = json.load(open(rq)) if rq.exists() else {"endpoint": MC_EP}
     plan = json.load(open(out / "shots.json")) if (out / "shots.json").exists() else []
@@ -267,6 +287,8 @@ def submit(a):
         fts = [float(x) for x in a.frame.split(",")] if a.frame else []
         ft = fts[i - 1] if i - 1 < len(fts) and fts[i - 1] >= 0 else s + 0.3
         if not frame.exists() or a.frame: sh("ffmpeg", "-v", "error", "-y", "-ss", str(ft), "-i", str(ref), "-frames:v", "1", str(frame))
+        plate, fr = pick_plate(a.set, frame)
+        meta.setdefault("framing", {})[tag] = fr; json.dump(meta, open(out / "meta.json", "w"), indent=1)
         # ---- the still (couple: both faces; solo: one), sanity-gated, then FaceFusion-fixed ----
         gwho = a.solo or "couple"
         for attempt in range(3):
@@ -370,6 +392,27 @@ def restore(d):
         print("queued", job.name, [p_["source"].split("/")[1] for p_ in passes])
 
 
+def blend(d, wait=900):
+    """Blend pass on the GPU worker: joined.mp4 -> blended.mp4 (person sits in the room: colour pull, light wrap, room defocus).
+    Background defocus is 2.5 for close framings, 1.0 for wide. Needs D:\\telugucouple\\worker.bat running."""
+    d = pathlib.Path(d).resolve()
+    meta = json.load(open(d / "meta.json")) if (d / "meta.json").exists() else {}
+    close = "close" in (meta.get("framing") or {}).values()
+    win = "D:\\telugucouple\\" + str(d.relative_to(ROOT)).replace("/", "\\")
+    job = ROOT / "jobs" / f"{d.name}_blend.json"
+    if not (d / "blended.mp4").exists() and not job.exists():
+        job.write_text(json.dumps({"type": "cmd", "timeout": 1800,
+            "cmd": f"cd /d {win} && python D:\\telugucouple\\tools\\blend.py joined.mp4 blended.mp4 --strength 0.45 --bg-blur {2.5 if close else 1.0}"}))
+        print("queued", job.name)
+    t0 = time.time()
+    while time.time() - t0 < wait:
+        if job.with_suffix(".done").exists():
+            print((job.with_suffix(".done").read_text().strip().splitlines() or ["?"])[0]); return d / "blended.mp4"
+        if job.with_suffix(".err").exists(): print("blend ERR", job.with_suffix(".err").read_text()[-400:]); return None
+        time.sleep(5)
+    print("blend still running; run `blend` again to wait"); return None
+
+
 def merge_halves(left, right, out, split=0.5, feather=40):
     """Left half of clip L + right half of clip R, blended over `feather` px at the split line. Both from the same room plate."""
     import cv2, numpy as np
@@ -411,7 +454,7 @@ def join(d):
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(); ap.add_argument("cmd", choices=["submit", "still", "restore", "join"]); ap.add_argument("path")
+    ap = argparse.ArgumentParser(); ap.add_argument("cmd", choices=["submit", "still", "restore", "join", "blend"]); ap.add_argument("path")
     ap.add_argument("--still-mode", default="seq", choices=["oneshot", "seq"], help="couple still: both in one edit, or one person then add the other")
     ap.add_argument("--n", type=int, default=2, help="still: how many candidates")
     ap.add_argument("--solo", choices=list(ch.WHO), help="solo reel of one person (e.g. padma); default is a couple reel")
@@ -430,4 +473,4 @@ if __name__ == "__main__":
     a = ap.parse_args()
     ns = lambda: argparse.Namespace(ref=a.path, **{k: v for k, v in vars(a).items() if k not in ("cmd", "path")})
     {"submit": lambda: submit(ns()), "still": lambda: still_test(ns()),
-     "restore": lambda: restore(a.path), "join": lambda: join(a.path)}[a.cmd]()
+     "restore": lambda: restore(a.path), "join": lambda: join(a.path), "blend": lambda: blend(a.path)}[a.cmd]()

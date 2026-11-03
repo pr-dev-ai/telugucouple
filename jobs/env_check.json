@@ -1,0 +1,1 @@
+{"type":"cmd","timeout":120,"cmd":"python -c \"import numpy, cv2, onnxruntime as o; print(numpy.__version__, cv2.__version__, o.__version__, o.get_available_providers())\" & python -c \"import rembg; print(rembg.__version__)\" & dir %USERPROFILE%\\.u2net"}

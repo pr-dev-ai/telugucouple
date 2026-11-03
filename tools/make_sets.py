@@ -4,6 +4,7 @@ Every still prompt gets the plate as a reference image, so the sofa, the almirah
   python make_sets.py --dry-run            # print the prompts
   python make_sets.py                      # all plates that do not exist yet (~$0.15 each on Nano Banana Pro)
   python make_sets.py hall_a bedroom_a     # only these
+  python make_sets.py close                # the *_close plates (room from ~2 m, for half-body / close dance framings)
   python make_sets.py contact              # sets/_contact.jpg to eyeball them
 """
 import os, sys, pathlib
@@ -20,10 +21,16 @@ def make(names, dry):
     print(f"{len(todo)} plates, about ${0.15*len(todo):.2f}")
     if dry:
         for n in todo:
-            print(f"\n[{n}] {ch.SETS[n]}")
+            print(f"\n[{n}] {ch.SETS.get(n, ch.CLOSE_PROMPT)}")
         return
     os.environ["FAL_KEY"] = mc.load_key(); import fal_client
     for n in todo:
+        if n in ch.CLOSE_OF:                      # close-range plate = edit of the wide plate, so it is the same room
+            import fal_client
+            base = ch.set_plate(ch.CLOSE_OF[n])
+            r = mc.fal_call(EP + "/edit", {"prompt": ch.CLOSE_PROMPT, "image_urls": [fal_client.upload_file(str(base))],
+                                          "aspect_ratio": "9:16", "resolution": "1K", "num_images": 1, "output_format": "png"}, os.environ["FAL_KEY"], f"set_{n}")
+            mc.save_result(r, SETS_DIR / f"{n}.png"); print("ok", n, flush=True); continue
         r = mc.fal_call(EP, {"prompt": f"{ch.SETS[n]} Empty room, absolutely no people, no text. {ch.NEG}",
                              "aspect_ratio": "9:16", "resolution": "1K", "num_images": 1, "output_format": "png"}, os.environ["FAL_KEY"], f"set_{n}")
         mc.save_result(r, SETS_DIR / f"{n}.png")      # retries: the VM's DNS blips
@@ -48,7 +55,9 @@ if __name__ == "__main__":
     if args == ["contact"]:
         contact()
     else:
-        bad = [n for n in args if n not in ch.SETS]
+        known = list(ch.SETS) + list(ch.CLOSE_OF)
+        if args == ["close"]: args = list(ch.CLOSE_OF)
+        bad = [n for n in args if n not in known]
         if bad:
-            sys.exit(f"unknown sets {bad}; known: {list(ch.SETS)}")
+            sys.exit(f"unknown sets {bad}; known: {known}")
         make(args or list(ch.SETS), "--dry-run" in sys.argv)
