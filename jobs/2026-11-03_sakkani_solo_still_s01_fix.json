@@ -1,0 +1,12 @@
+{
+ "type": "face_restore",
+ "target": "reels/2026-11-03_sakkani_solo/still_s01.png",
+ "output": "reels/2026-11-03_sakkani_solo/still_s01_fx.png",
+ "passes": [
+  {
+   "source": "identity/padma/v1/hero.png",
+   "mode": "one"
+  }
+ ],
+ "enhancer_blend": 60
+}

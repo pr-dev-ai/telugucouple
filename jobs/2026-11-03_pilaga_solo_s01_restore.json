@@ -1,0 +1,11 @@
+{
+ "type": "face_restore",
+ "target": "reels/2026-11-03_pilaga_solo/src_2026-11-03_pilaga_solo_s01.mp4",
+ "output": "reels/2026-11-03_pilaga_solo/restored_s01.mp4",
+ "passes": [
+  {
+   "source": "identity/padma/v1/hero.png",
+   "mode": "one"
+  }
+ ]
+}

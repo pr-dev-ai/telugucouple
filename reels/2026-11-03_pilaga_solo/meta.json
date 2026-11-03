@@ -1,0 +1,10 @@
+{
+ "route": "mc",
+ "set": "hall_b",
+ "order": "satyam-left",
+ "split": 0.5,
+ "light": "morning",
+ "look": "emerald green silk saree with a thin gold border draped low on the hips, sleeveless deep-V gold blouse, jasmine in the open braid, gold jhumkas, bangles",
+ "still_mode": "seq",
+ "solo": "padma"
+}

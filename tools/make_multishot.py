@@ -186,6 +186,33 @@ def make_couple_still(fal_client, still, frame, plate, look, glam, light, order,
         fetch(r["images"][0]["url"], still); fal_cost.spend(EDIT_EP, 1, note + "_step2")
 
 
+SOLO_HOT = ("Bold glamorous trending-reel styling: saree or half-saree draped low on the hips so her navel, waist and midriff show, "
+            "fitted sleeveless or thin-strap blouse with a deep V or sweetheart neckline, saree pleats and pallu hugging her curves, "
+            "sultry confident expression, playful eye contact with the camera, glossy lips, kajal. Instagram-safe: fully clothed, no lingerie, "
+            "no wardrobe malfunction. The styling must not change her face shape, eyes, nose or jawline at all.")
+
+
+def make_solo_still(fal_client, still, frame, plate, who, look, glam, light, anchor_path, note):
+    """One person (solo reel) in the flat, copying the reference frame's framing and pose. Images: who x NREF, [anchor], plate, frame (last)."""
+    up = fal_client.upload_file
+    frame = mask_faces(frame)
+    n = NREF; anchor = [up(str(anchor_path))] if anchor_path else []
+    anchor_txt = (f"Image {n+1} is the same person earlier in this same video: keep EXACTLY the same garment, colours, jewellery, hairstyle "
+                  f"and room as in that image. " if anchor else "")
+    plate_i = n + 1 + (1 if anchor else 0)
+    she = "the woman" if ch.CHARS[who]["gender"] == "female" else "the man"
+    styl = (SOLO_HOT if who == "padma" else ch.GLAM[who]) if glam else ""
+    prompt = (f"Images 1-{n} show {she}, {ch.CHARS[who]['label']}: the face and body must be identical to those images. {anchor_txt}"
+              f"Image {plate_i} is the empty room: the place is EXACTLY that room, same walls, floor, furniture, window and door. "
+              f"The LAST image is a video frame whose face is blurred on purpose: recreate its exact camera framing, crop, pose, body angle and "
+              f"lighting direction, but it is HER/HIM from images 1-{n}, not the person in the last image. Look: {look}. {styl} "
+              f"{ch.LIGHT[light]}, {PHONE} Face frontal or three-quarter and clearly visible, hands visible. One person only. "
+              f"{ch.FACE_TXT[who]} {ch.BODY_TXT[who]}")
+    r = fal_client.subscribe(EDIT_EP, arguments={"thinking_level": "minimal", "aspect_ratio": "9:16", "resolution": STILL_RES, "num_images": 1,
+        "output_format": "png", "image_urls": [up(str(x)) for x in refs2(who)] + anchor + [up(str(plate)), up(str(frame))], "prompt": prompt})
+    fetch(r["images"][0]["url"], still); fal_cost.spend(EDIT_EP, 1, note)
+
+
 def solo_still(fal_client, couple_still, who, out):
     """split route: the same photo with only one of them in it (the other removed, room filled in)."""
     other = "the woman (Padma)" if who == "satyam" else "the man (Satyam)"
@@ -227,7 +254,7 @@ def submit(a):
     reqs = json.load(open(rq)) if rq.exists() else {"endpoint": MC_EP}
     plan = json.load(open(out / "shots.json")) if (out / "shots.json").exists() else []
     looks = [x.strip() for x in a.look.split("||")]
-    meta = {"route": a.route, "set": a.set, "order": a.order, "split": a.split, "light": a.light, "look": a.look, "still_mode": a.still_mode}
+    meta = {"route": a.route, "set": a.set, "order": a.order, "split": a.split, "light": a.light, "look": a.look, "still_mode": a.still_mode, "solo": a.solo}
     json.dump(meta, open(out / "meta.json", "w"), indent=1)
     for i, (s, e) in enumerate(shots, 1):
         look = looks[min(i - 1, len(looks) - 1)]
@@ -240,36 +267,44 @@ def submit(a):
         fts = [float(x) for x in a.frame.split(",")] if a.frame else []
         ft = fts[i - 1] if i - 1 < len(fts) and fts[i - 1] >= 0 else s + 0.3
         if not frame.exists() or a.frame: sh("ffmpeg", "-v", "error", "-y", "-ss", str(ft), "-i", str(ref), "-frames:v", "1", str(frame))
-        # ---- the couple still, gated on BOTH faces ----
+        # ---- the still (couple: both faces; solo: one), sanity-gated, then FaceFusion-fixed ----
+        gwho = a.solo or "couple"
         for attempt in range(3):
             if still.exists():
-                ok, line = gate(still, min_=STILL_SANITY); print(tag, "sanity gate:", line)
-                if ok: break
+                ok, line = gate(still, gwho, min_=STILL_SANITY); print(tag, "sanity gate:", line)
+                if ok or ("no clear face" in line and a.solo): break      # solo back views have no face to judge
                 still.rename(still.with_name(f"{still.stem}_fail{attempt}{still.suffix}"))
             anchor_path = first if (i > 1 and first.exists() and a.anchor) else None
-            make_couple_still(fal_client, still, frame, plate, look, a.glam, a.light, a.order, anchor_path, a.still_mode, f"{a.name}_{tag}")
-        ok, line = gate(still, min_=STILL_SANITY)
-        if not ok and not a.force:
+            if a.solo:
+                make_solo_still(fal_client, still, frame, plate, a.solo, look, a.glam, a.light, anchor_path, f"{a.name}_{tag}")
+            else:
+                make_couple_still(fal_client, still, frame, plate, look, a.glam, a.light, a.order, anchor_path, a.still_mode, f"{a.name}_{tag}")
+        ok, line = gate(still, gwho, min_=STILL_SANITY)
+        if not ok and not a.force and not ("no clear face" in line and a.solo):
             print(tag, "STILL FAILS THE SANITY GATE after 3 tries, not animated:", line, "(--force to animate anyway)"); continue
         if a.fix:                                   # exact faces in before Kling sees it
-            fx = still_fix(still)
+            fx = still_fix(still, a.solo)
             if fx:
-                ok2, line2 = gate(fx); print(tag, "fixed still gate:", line2)
+                ok2, line2 = gate(fx, gwho); print(tag, "fixed still gate:", line2)
                 if ok2: still = fx
         im = __import__("cv2").imread(str(still)); assert im is not None and min(im.shape[:2]) >= 720, f"{still.name} under 720 px (Kling 422 risk)"
         # ---- animate ----
         if a.route == "mc":
             h = fal_client.submit(MC_EP, arguments={"video_url": fal_client.upload_file(str(seg)), "image_url": fal_client.upload_file(str(still)),
                 "character_orientation": "video", "keep_original_sound": False,
-                "prompt": "An older bald Indian man with a grey beard and a beautiful Indian woman in a saree, the same two people as the image, dancing together in their small flat, performing the movement naturally"})
+                "prompt": ("A beautiful curvy Indian woman in a saree, the same person as the image, dancing confidently and gracefully at home, performing the movement naturally"
+                           if a.solo == "padma" else "A bald Indian man with a black moustache and a beautiful Indian woman in a saree, the same two people as the image, dancing together at home, performing the movement naturally")})
             fal_cost.spend(MC_EP, round(e - s, 2), f"{a.name}_{tag}")
             reqs[f"motion_{tag}"] = h.request_id; plan.append({"shot": tag, "start": s, "end": e})
         elif a.route == "i2v":
             d = "10" if (e - s) > 5.5 else "5"
             h = fal_client.submit(I2V_EP, arguments={"image_url": fal_client.upload_file(str(still)), "duration": d, "cfg_scale": 0.5,
-                "prompt": (f"The same two people dancing together to a fast Telugu folk song in their small flat: {look}. The woman dances gracefully "
-                           f"with energetic full-body steps and her saree pallu swinging; the bald old man copies her steps stiffly and clumsily but with "
-                           f"full enthusiasm. Handheld phone video, static camera, both stay fully in frame, faces visible."),
+                "prompt": ((f"The same woman dancing to a fast Telugu folk song at home: {look}. Confident, graceful, energetic full-body steps, hip and waist "
+                            f"moves, her saree pallu swinging, playful eye contact with the camera. Handheld phone video, static camera, she stays fully in frame, face visible.")
+                           if a.solo else
+                           (f"The same two people dancing together to a fast Telugu folk song at home: {look}. The woman dances gracefully and confidently "
+                            f"with energetic full-body steps and her saree pallu swinging; the bald man copies her steps stiffly and clumsily but with "
+                            f"full enthusiasm, and they share a romantic look. Handheld phone video, static camera, both stay fully in frame, faces visible.")),
                 "negative_prompt": "blur, distortion, low quality, extra people, text, watermark, morphing faces"})
             fal_cost.spend(I2V_EP, int(d), f"{a.name}_{tag}")
             reqs[f"i2v_{tag}"] = h.request_id; plan.append({"shot": tag, "start": s, "end": s + int(d)})
@@ -322,8 +357,10 @@ def restore(d):
         if not src.exists(): src.write_bytes(p.read_bytes())
         job = ROOT / "jobs" / f"{d.name}_{tag}_restore.json"
         if job.exists(): continue
-        if tag.endswith(("L", "R")):
-            meta = json.load(open(d / "meta.json")) if (d / "meta.json").exists() else {"order": "satyam-left"}
+        meta = json.load(open(d / "meta.json")) if (d / "meta.json").exists() else {"order": "satyam-left"}
+        if meta.get("solo"):
+            passes = restore_passes(meta["solo"])
+        elif tag.endswith(("L", "R")):
             left_is = "satyam" if meta.get("order", "satyam-left") == "satyam-left" else "padma"
             who = left_is if tag.endswith("L") else ("padma" if left_is == "satyam" else "satyam")
             passes = [{"source": f"identity/{who}/v1/hero.png", "mode": "one"}]
@@ -377,6 +414,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("cmd", choices=["submit", "still", "restore", "join"]); ap.add_argument("path")
     ap.add_argument("--still-mode", default="seq", choices=["oneshot", "seq"], help="couple still: both in one edit, or one person then add the other")
     ap.add_argument("--n", type=int, default=2, help="still: how many candidates")
+    ap.add_argument("--solo", choices=list(ch.WHO), help="solo reel of one person (e.g. padma); default is a couple reel")
     ap.add_argument("--no-fix", dest="fix", action="store_false", help="skip the FaceFusion face fix of each still (needs worker.bat)")
     ap.add_argument("--name"); ap.add_argument("--start", type=float, default=0); ap.add_argument("--dur", type=float, default=15)
     ap.add_argument("--look", default="she in a bright saree, he in banian and lungi")
