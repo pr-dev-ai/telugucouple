@@ -2,7 +2,7 @@
 Couple reel from a trending reference: split the reference at its cuts, make one still of Satyam + Padma per shot that copies the
 shot's framing inside the flat, animate, face-restore, join.
 
-  python make_multishot.py submit <ref.mp4> --name chinni --start 0 --dur 15 --set hall_a --look "she in a red saree, he in banian and lungi" --route mc
+  python make_multishot.py submit <ref.mp4> --name chinni --start 0 --dur 15 --set hall_a --look "she in a red saree, he in a light blue shirt and formal trousers" --route mc
   python poll.py ../reels/<date>_<name>                       # downloads motion_*.mp4 / i2v_*.mp4 (verified)
   python make_multishot.py restore ../reels/<date>_<name>     # queues FaceFusion jobs (two passes for two-person clips)
   python make_multishot.py join ../reels/<date>_<name>        # merges split halves if any, concats shots -> joined.mp4
@@ -18,7 +18,7 @@ Shots shorter than MIN_SHOT seconds are merged into the previous one (Kling need
 import argparse, json, os, pathlib, subprocess, sys, time, urllib.request
 
 HERE = pathlib.Path(__file__).parent; ROOT = HERE.parent
-sys.path.insert(0, str(HERE)); import make_candidates as mc, characters as ch, fal_cost
+sys.path.insert(0, str(HERE)); import make_candidates as mc, characters as ch, fal_cost, motion_engines as me
 
 
 def fetch(url, dst, tries=6):
@@ -34,6 +34,7 @@ EDIT_EP = "google/nano-banana-2.1/edit"
 MC_EP = "fal-ai/kling-video/v2.6/standard/motion-control"
 I2V_EP = "fal-ai/kling-video/v2.5-turbo/pro/image-to-video"
 MIN_SHOT = 3.0; SCENE_T = 0.35
+SATYAM_SHIRTS = ['a light blue half-sleeve cotton shirt', 'a white full-sleeve shirt with thin grey stripes', 'a beige half-sleeve checked shirt', 'a pale green full-sleeve cotton shirt', 'a light grey half-sleeve shirt with small checks']
 
 
 def sh(*a, **k): return subprocess.run(a, check=True, capture_output=True, text=True, **k)
@@ -89,7 +90,7 @@ def couple_prompt(look, glam, light, order, anchor):
     return (f"Two people, a married couple, in ONE frame. Images 1-{n} show the man, Satyam: his face must be identical to those images "
             f"(bald head, black moustache, belly). Images {n+1}-{2*n} show the woman, Padma: her face must be identical to those images. "
             f"Do not mix the two faces. {anchor_txt}"
-            f"Image {plate_i} is the empty room: the place is EXACTLY that room, same walls, floor, furniture, window and door. "
+            f"Image {plate_i} {ch.ROOM_REAL}. "
             f"Recreate the exact camera framing, crop, both poses, body angles and the lighting direction of the LAST image, but it is THEM (the faces in the last image are blurred on purpose; "
             f"take only the poses and framing from it): {left} stands where the left person is and {right} where the right person is. "
             f"Their look: {look}. He wears {ch.CLOTHES['satyam']} She wears {ch.CLOTHES['padma']} "
@@ -111,7 +112,7 @@ def seq_prompts(look, glam, light, order, anchor):
                   f"hairstyle and room as in that image. " if anchor else "")
     plate_i = n + 1 + (1 if anchor else 0)
     p1 = (f"Images 1-{n} show {lab[first]}: the face must be identical to those images. {anchor_txt}"
-          f"Image {plate_i} is the empty room: the place is EXACTLY that room. The LAST image is a video frame with two people whose faces are blurred on purpose (use it only for pose, framing and position): "
+          f"Image {plate_i} {ch.ROOM_REAL}. The LAST image is a video frame with two people whose faces are blurred on purpose (use it only for pose, framing and position): "
           f"put ONLY {first.capitalize()} in the room, standing exactly where the {side[first]} person stands, copying that person's pose, "
           f"body angle, crop and camera framing; the {side[second]} person's spot stays EMPTY (just the room). "
           f"The look: {look}. {wear[first]} {ch.CAMERA_MATCH} {ch.LIGHT[light]}. {ch.LIGHT_MATCH} {PHONE} One person only. {ch.FACE_TXT[first]} {ch.BODY_TXT[first]}")
@@ -206,13 +207,14 @@ def framing(frame):
 def pick_plate(name, frame):
     """The room plate for this shot: <name>_close for close framings when it exists, else the wide plate."""
     fr = framing(frame)
-    close = ch.ROOT / "sets" / f"{name}_close.png"
-    p = close if (fr == "close" and close.exists()) else ch.set_plate(name)
+    base = ch.set_plate(name)
+    close = base.with_name(f"{name}_close{base.suffix}")
+    p = close if (fr == "close" and close.exists()) else base
     print(f"  framing {fr} -> plate {p.name}", flush=True)
     return p, fr
 
 
-def make_solo_still(fal_client, still, frame, plate, who, look, glam, light, anchor_path, note):
+def make_solo_still(fal_client, still, frame, plate, who, look, glam, light, anchor_path, note, judge_fix=""):
     """One person (solo reel) in the flat, copying the reference frame's framing and pose. Images: who x NREF, [anchor], plate, frame (last)."""
     up = fal_client.upload_file
     frame = mask_faces(frame)
@@ -222,14 +224,22 @@ def make_solo_still(fal_client, still, frame, plate, who, look, glam, light, anc
     plate_i = n + 1 + (1 if anchor else 0)
     she = "the woman" if ch.CHARS[who]["gender"] == "female" else "the man"
     styl = (SOLO_HOT if who == "padma" else ch.GLAM[who]) if glam else ""
+    place = (f"Image {plate_i} {ch.ROOM_REAL}. " if plate else
+             # Pradeep 5 Nov (same fix as Siri): no home photo; keep the reference reel's own real place with small natural differences
+             "Keep the SAME real place, camera framing, lens look and natural light as the last image (it is a real phone video), but make a few "
+             "small natural differences so it is not an exact copy: a slightly different plant or pot arrangement, a different everyday object in "
+             "the background, a slightly different wall or railing shade, a little different time of day. Ordinary everyday real location, nothing "
+             "glossy, posh or cinematic. Copy ONLY the pose, body angle and camera distance of the person in the last image; do NOT copy her clothing, "
+             "colours, jewellery or hairstyle. Lighting is motivated by the place itself (sun direction, lamps), never studio-lit or flash-lit. ")
     prompt = (f"Images 1-{n} show {she}, {ch.CHARS[who]['label']}: the face and body must be identical to those images. {anchor_txt}"
-              f"Image {plate_i} is the empty room: the place is EXACTLY that room, same walls, floor, furniture, window and door. "
+              f"{place}"
               f"The LAST image is a video frame whose face is blurred on purpose: recreate its exact camera framing, crop, pose, body angle and "
               f"lighting direction, but it is HER/HIM from images 1-{n}, not the person in the last image. Look: {look}. {styl} "
               f"{ch.CAMERA_MATCH} {ch.LIGHT[light]}. {ch.LIGHT_MATCH} {PHONE} Face frontal or three-quarter and clearly visible, hands visible. One person only. "
-              f"{ch.FACE_TXT[who]} {ch.BODY_TXT[who]}")
+              f"{ch.FACE_TXT[who]} {ch.BODY_TXT[who]}" + (f" Reviewer notes from the previous attempt (fix these): {judge_fix}" if judge_fix else ""))
+    if not plate: prompt = prompt.replace(f"{ch.CAMERA_MATCH} {ch.LIGHT[light]}. {ch.LIGHT_MATCH} ", "")   # light comes from the reference place
     r = fal_client.subscribe(EDIT_EP, arguments={"thinking_level": "minimal", "aspect_ratio": "9:16", "resolution": STILL_RES, "num_images": 1,
-        "output_format": "png", "image_urls": [up(str(x)) for x in refs2(who)] + anchor + [up(str(plate)), up(str(frame))], "prompt": prompt})
+        "output_format": "png", "image_urls": [up(str(x)) for x in refs2(who)] + anchor + ([up(str(plate))] if plate else []) + [up(str(frame))], "prompt": prompt})
     fetch(r["images"][0]["url"], still); fal_cost.spend(EDIT_EP, 1, note)
 
 
@@ -257,7 +267,7 @@ def submit(a):
     ref = out / "ref.mp4"
     sp = f",setpts={a.slow}*PTS" if a.slow != 1 else ""
     sh("ffmpeg", "-v", "error", "-y", "-ss", str(a.start), "-t", str(a.dur / a.slow), "-i", a.ref,
-       "-vf", f"scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280{sp}", "-r", "24", "-an", "-c:v", "libx264", "-crf", "18", str(ref))
+       "-vf", f"scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280{sp}{',hflip' if a.flip else ''}", "-r", "24", "-an", "-c:v", "libx264", "-crf", "18", str(ref))
     a.dur = dur_of(ref)
     if a.cuts == "none":
         shots = [(0.0, a.dur)]
@@ -269,10 +279,21 @@ def submit(a):
     for s_, e_ in shots:        # Kling MC accepts 3-30 s per request; a 422 (bad input) CAN be billed, a 5xx is not
         assert 3.0 <= (e_ - s_) <= 30.0, f"shot {s_:.1f}-{e_:.1f} is {e_-s_:.2f}s, Kling needs 3-30 s (merge or re-cut)"
     os.environ["FAL_KEY"] = mc.load_key(); import fal_client
-    ch.set_plate(a.set)                       # fail early if the room does not exist
+    loose = ""
+    refplace = bool(a.solo) and a.place == "ref"     # Pradeep 5 Nov: solo dance reels use the reference reel's own place
+    if refplace: a.set = "ref"
+    elif a.set in ch.VIEWS:                   # room kind -> rotate the real view + vary loose items (4 Nov)
+        a.set, loose = ch.choose_room(a.set, a.slot, a.name); print("room:", a.set, "| items:", loose)
+    if not refplace: ch.set_plate(a.set)      # fail early if the room does not exist
     rq = out / "requests.json"
     reqs = json.load(open(rq)) if rq.exists() else {"endpoint": MC_EP}
     plan = json.load(open(out / "shots.json")) if (out / "shots.json").exists() else []
+    if not a.look:                      # wardrobe rotation (4 Nov): Padma's outfit from the slot, Satyam always plain
+        pl = ch.choose_look(a.slot, a.name)
+        shirt = SATYAM_SHIRTS[len(list(ROOT.glob("reels/*"))) % len(SATYAM_SHIRTS)]   # rotate (Pradeep 5 Nov: shirts and pants)
+        a.look = pl if a.solo == "padma" else f"she wears {pl}; he wears {shirt} tucked into loose dark formal trousers with a plain belt above his belly"
+        print("wardrobe:", a.look)
+    if loose: a.look = " || ".join(f"{x.strip()}. {ch.loose_txt(loose)}" for x in a.look.split("||"))
     looks = [x.strip() for x in a.look.split("||")]
     meta = {"route": a.route, "set": a.set, "order": a.order, "split": a.split, "light": a.light, "look": a.look, "still_mode": a.still_mode, "solo": a.solo}
     json.dump(meta, open(out / "meta.json", "w"), indent=1)
@@ -287,21 +308,35 @@ def submit(a):
         fts = [float(x) for x in a.frame.split(",")] if a.frame else []
         ft = fts[i - 1] if i - 1 < len(fts) and fts[i - 1] >= 0 else s + 0.3
         if not frame.exists() or a.frame: sh("ffmpeg", "-v", "error", "-y", "-ss", str(ft), "-i", str(ref), "-frames:v", "1", str(frame))
-        plate, fr = pick_plate(a.set, frame)
+        plate, fr = (None, "ref") if refplace else pick_plate(a.set, frame)
         meta.setdefault("framing", {})[tag] = fr; json.dump(meta, open(out / "meta.json", "w"), indent=1)
         # ---- the still (couple: both faces; solo: one), sanity-gated, then FaceFusion-fixed ----
-        gwho = a.solo or "couple"
-        for attempt in range(3):
+        gwho = a.solo or "couple"; judge_fix = ""; judged_ok = not (a.judge and a.solo)
+        for attempt in range(5 if a.judge and a.solo else 3):
             if still.exists():
                 ok, line = gate(still, gwho, min_=STILL_SANITY); print(tag, "sanity gate:", line)
-                if ok or ("no clear face" in line and a.solo): break      # solo back views have no face to judge
-                still.rename(still.with_name(f"{still.stem}_fail{attempt}{still.suffix}"))
+                if ok or ("no clear face" in line and a.solo):      # solo back views have no face to judge
+                    if judged_ok: break
+                    # Gate 1 (Siri 5 Nov): Claude realism judge on the still BEFORE any Kling spend; its fix feeds the next try
+                    jr = subprocess.run([sys.executable, str(HERE / "judge.py"), "still", str(still), str(frame)], capture_output=True, text=True)
+                    try:
+                        t = jr.stdout; jj = json.loads(t[t.index("{"): t.rindex("}") + 1])
+                        print(tag, "judge:", jj.get("verdict"), {k: jj.get(k) for k in ("phone_real", "lighting", "skin_face", "hands_body", "background", "overall")}, flush=True)
+                        if jj.get("verdict") == "PASS": judged_ok = True; break
+                        judge_fix = jj.get("fix", "") + " Avoid: " + "; ".join(jj.get("ai_tells", [])[:4])
+                        still.rename(still.with_name(f"{still.stem}_judgefail{attempt}{still.suffix}"))
+                    except Exception as e:
+                        print(tag, "judge error, keeping still:", e, jr.stderr[-300:]); judged_ok = True; break
+                else:
+                    still.rename(still.with_name(f"{still.stem}_fail{attempt}{still.suffix}"))
             anchor_path = first if (i > 1 and first.exists() and a.anchor) else None
             if a.solo:
-                make_solo_still(fal_client, still, frame, plate, a.solo, look, a.glam, a.light, anchor_path, f"{a.name}_{tag}")
+                make_solo_still(fal_client, still, frame, plate, a.solo, look, a.glam, a.light, anchor_path, f"{a.name}_{tag}", judge_fix)
             else:
                 make_couple_still(fal_client, still, frame, plate, look, a.glam, a.light, a.order, anchor_path, a.still_mode, f"{a.name}_{tag}")
         ok, line = gate(still, gwho, min_=STILL_SANITY)
+        if not judged_ok and not a.force:
+            print(tag, "STILL FAILS THE REALISM JUDGE after the tries, not animated (--no-judge / --force to override)"); continue
         if not ok and not a.force and not ("no clear face" in line and a.solo):
             print(tag, "STILL FAILS THE SANITY GATE after 3 tries, not animated:", line, "(--force to animate anyway)"); continue
         if a.fix:                                   # exact faces in before Kling sees it
@@ -309,9 +344,19 @@ def submit(a):
             if fx:
                 ok2, line2 = gate(fx, gwho); print(tag, "fixed still gate:", line2)
                 if ok2: still = fx
+        if a.stills_only: print(tag, "still ready (stills-only: Kling not submitted; approve, then run again without --stills-only)"); continue
         im = __import__("cv2").imread(str(still)); assert im is not None and min(im.shape[:2]) >= 720, f"{still.name} under 720 px (Kling 422 risk)"
         # ---- animate ----
-        if a.route == "mc":
+        if a.route == "mc" and a.engine == "scail2gpu":            # 6 Nov default: our rented GPU, 720p. Solo = replace (reference place); couple = 2-person animate (their flat)
+            rid = me.submit_gpu(seg, still, out / f"motion_{tag}.mp4", tag, mode="replace" if a.solo else "animate", people=1 if a.solo else 2)
+            reqs[f"motion_{tag}"] = rid; reqs.setdefault("engines", {})[f"motion_{tag}"] = a.engine; plan.append({"shot": tag, "start": s, "end": e})
+        elif a.route == "mc" and a.engine != "kling" and a.solo:   # DreamActor / hosted SCAIL-2 (solo only)
+            if False: pass
+            else:
+                rid = me.submit_ws(a.engine, seg, still)
+                fal_cost.spend(me.cost_endpoint(a.engine), me.billed_units(a.engine, e - s), f"{a.name}_{tag}")
+            reqs[f"motion_{tag}"] = rid; reqs.setdefault("engines", {})[f"motion_{tag}"] = a.engine; plan.append({"shot": tag, "start": s, "end": e})
+        elif a.route == "mc":
             h = fal_client.submit(MC_EP, arguments={"video_url": fal_client.upload_file(str(seg)), "image_url": fal_client.upload_file(str(still)),
                 "character_orientation": "video", "keep_original_sound": False,
                 "prompt": ("A beautiful curvy Indian woman in a saree, the same person as the image, dancing confidently and gracefully at home, performing the movement naturally"
@@ -321,7 +366,7 @@ def submit(a):
         elif a.route == "i2v":
             d = "10" if (e - s) > 5.5 else "5"
             h = fal_client.submit(I2V_EP, arguments={"image_url": fal_client.upload_file(str(still)), "duration": d, "cfg_scale": 0.5,
-                "prompt": ((f"The same woman dancing to a fast Telugu folk song at home: {look}. Confident, graceful, energetic full-body steps, hip and waist "
+                "prompt": a.motion.replace("{look}", look) if a.motion else ((f"The same woman dancing to a fast Telugu folk song at home: {look}. Confident, graceful, energetic full-body steps, hip and waist "
                             f"moves, her saree pallu swinging, playful eye contact with the camera. Handheld phone video, static camera, she stays fully in frame, face visible.")
                            if a.solo else
                            (f"The same two people dancing together to a fast Telugu folk song at home: {look}. The woman dances gracefully and confidently "
@@ -455,14 +500,21 @@ def join(d):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("cmd", choices=["submit", "still", "restore", "join", "blend"]); ap.add_argument("path")
+    ap.add_argument("--engine", choices=["kling","dreamactor","scail2","scail2gpu"], default="scail2gpu", help="motion model for --route mc: scail2gpu (default 6 Nov, rented GPU 720p daily batch) | dreamactor | kling")
     ap.add_argument("--still-mode", default="seq", choices=["oneshot", "seq"], help="couple still: both in one edit, or one person then add the other")
     ap.add_argument("--n", type=int, default=2, help="still: how many candidates")
     ap.add_argument("--solo", choices=list(ch.WHO), help="solo reel of one person (e.g. padma); default is a couple reel")
     ap.add_argument("--no-fix", dest="fix", action="store_false", help="skip the FaceFusion face fix of each still (needs worker.bat)")
     ap.add_argument("--name"); ap.add_argument("--start", type=float, default=0); ap.add_argument("--dur", type=float, default=15)
-    ap.add_argument("--look", default="she in a bright saree, he in banian and lungi")
-    ap.add_argument("--set", default="hall_a", choices=list(ch.SETS)); ap.add_argument("--light", default="evening", choices=list(ch.LIGHT))
+    ap.add_argument("--look", default="", help="leave empty: Padma's outfit comes from the wardrobe rotation for --slot")
+    ap.add_argument("--slot", default="evening", choices=["morning", "late_morning", "evening", "out", "night"])
+    ap.add_argument("--set", default="hall", help="room kind (hall/kitchen/bedroom/balcony/door) rotates views, or a fixed view like hall_b"); ap.add_argument("--light", default="evening", choices=list(ch.LIGHT))
     ap.add_argument("--route", default="mc", choices=["mc", "split", "i2v"])
+    ap.add_argument("--place", default="ref", choices=["ref", "home"], help="solo: ref = the reference reel's own place (default, 5 Nov); home = real house plates (--set)")
+    ap.add_argument("--stills-only", action="store_true", help="make + gate + judge the stills, do not submit Kling (approval step)")
+    ap.add_argument("--no-judge", dest="judge", action="store_false", help="skip the Claude realism judge on solo stills")
+    ap.add_argument("--no-flip", dest="flip", action="store_false", help="do not mirror the reference (default mirrors it for uniqueness)")
+    ap.add_argument("--motion", default="", help="i2v: own motion prompt ({look} is filled in), e.g. for slow romantic songs; default = fast folk dance")
     ap.add_argument("--order", default="satyam-left", choices=["satyam-left", "padma-left"], help="who stands on the left in the reference")
     ap.add_argument("--split", type=float, default=0.5, help="split route: x fraction of the frame where the two dancers divide")
     ap.add_argument("--plain", dest="glam", action="store_false"); ap.add_argument("--force", action="store_true", help="animate even if the gate fails")

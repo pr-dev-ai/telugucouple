@@ -20,3 +20,11 @@ refs/*.mp4
 sets/*.zip
 sets_old_1bhk/
 *.bad
+# 6 Nov: backups, local models, GPU runtime state
+*.bak
+*.bak_*
+tools/models/
+tools/scout/exemplars/
+tools/_old/
+tools/gpu/state.json
+gpu_queue/

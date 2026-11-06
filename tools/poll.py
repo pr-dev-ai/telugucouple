@@ -13,11 +13,31 @@ d = pathlib.Path(sys.argv[1])
 reqs = json.load(open(d / "requests.json"))
 os.environ["FAL_KEY"] = mc.load_key()
 import fal_client
+import motion_engines as me
+engines = reqs.get("engines", {})
 for key, rid in reqs.items():
-    if key == "endpoint": continue
+    if key in ("endpoint", "engines") or not isinstance(rid, str): continue
     out = d / f"{key}.mp4"
     if out.exists():
         print(key, "done"); continue
+    eng = engines.get(key, "kling")
+    if eng == "scail2gpu":
+        print(key, "waiting for the GPU batch (gpu_queue)"); continue
+    if eng in me.WS:
+        st, info = me.poll_ws(eng, rid)
+        if st == "failed":
+            if not (d / f"{key}.error.txt").exists():
+                import fal_cost
+                plan = {x["shot"]: x for x in json.load(open(d / "shots.json"))} if (d / "shots.json").exists() else {}
+                tag = key.split("_")[1]; secs = plan[tag]["end"] - plan[tag]["start"] if tag in plan else 0
+                if secs: fal_cost.refund(me.cost_endpoint(eng), me.billed_units(eng, secs), f"{d.name}_{tag} {rid[:8]}")
+            (d / f"{key}.error.txt").write_text(info); print(key, eng, "FAILED:", info); continue
+        if st != "done" or not info: print(key, eng, info); continue
+        import subprocess
+        tmp = out.with_suffix(".part"); urllib.request.urlretrieve(info, tmp)
+        errs = subprocess.run(["ffmpeg","-v","error","-i",str(tmp),"-f","null","-"],capture_output=True,text=True).stderr.strip()
+        if errs: tmp.unlink(); print(key, "download damaged, deleted; run poll again"); continue
+        tmp.rename(out); print(key, eng, "saved (verified)"); continue
     ep = EP[key.split("_")[0]]
     try:
         st = type(fal_client.status(ep, rid, with_logs=False)).__name__

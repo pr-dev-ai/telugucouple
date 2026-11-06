@@ -1,0 +1,39 @@
+{
+ "note": "Padma (satyam_padma.reels) trend scout sources. audios = songs behind Padma's best reel plus Siri's 10K+ songs (same niche); learned_audios are added from the best picks. Picks that Siri's scout already chose are skipped.",
+ "audios": {
+  "Chinni Chinni (Chitra) (Siri) 79K": "1339674939911367",
+  "Chiralu Lev Rayikal Lev DJ (Siri) 31K": "1019719302087441",
+  "Baavavi Nuuvu (Siri) 23K": "258042710035041",
+  "Ranu Ranu (Siri) 17K": "173664795621213",
+  "Ele Ele Maradalaa (Siri) 13K": "454827231710315"
+ },
+ "learned_audios": {
+  "Nadakallo Nadaka (DJ Remix S (2026-11-05)": "748494807372986",
+  "Gundu Sudhi (2026-11-05)": "2698480107126413"
+ },
+ "hashtags": [
+  "telugufolk",
+  "telugudjsongs",
+  "sareedance",
+  "halfsaree",
+  "telanganafolksongs",
+  "sareelove",
+  "telugudance",
+  "teluguaunty"
+ ],
+ "padma_winners": [
+  "DfTRzQ7gqPG"
+ ],
+ "exclude_users": [
+  "siri_reddy.kompally",
+  "satyam_padma.reels"
+ ],
+ "min_views": 10000,
+ "max_age_days": 30,
+ "min_dur": 9,
+ "max_dur": 35,
+ "picks": 8,
+ "blocked_audios": {
+  "Aayee Hai Diwali (Hindi, seasonal)": "2015177455417357"
+ }
+}

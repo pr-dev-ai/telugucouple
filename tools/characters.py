@@ -37,19 +37,18 @@ BODY_TXT = {
 }
 # signature clothes (default look when a reel's --look does not say otherwise)
 CLOTHES = {
-    "satyam": ("an old loose cotton lungi with a plain white banian or a faded old round-neck T-shirt at home, or an old-fashioned "
-               "ironed half-sleeve checked shirt tucked into loose trousers with the belt above the belly when back from the office, "
-               "bathroom chappals, a black thread on the right wrist. Never stylish, never fashionable, zero glamour next to her."),
+    # Pradeep 5 Nov: shirts and pants for Satyam (no more vest and lungi)
+    "satyam": ("a plain half-sleeve or full-sleeve cotton shirt (light blue, white, beige, light checks or thin stripes) tucked into loose formal trousers with a plain belt sitting above his belly, like a middle-aged government officer; bathroom chappals or plain sandals at home, a black thread on the right wrist, a basic steel watch. Neat but never stylish, never fashionable, zero glamour next to her."),
     "padma":  ("a bright saree draped low on the hips so her waist and midriff show, fitted blouse with a deep sweetheart neckline, "
                "elbow sleeves or sleeveless, glossy lips, light everyday makeup, toe rings, anklets."),
 }
 # per-reel glam text for Padma (same register as Siri's GLAM, which Instagram has been rewarding). Full-body dance framing only.
 GLAM = {
     "padma": ("Glamorous home-made reel styling: saree or half-saree draped low so her waist and midriff show, fitted blouse with a deep "
-              "sweetheart or V neckline, kajal, glossy rose lips, jasmine in the plait, bangles. The styling must not change her face shape, "
+              "sweetheart or V neckline, kajal, glossy rose lips, a small jasmine string pinned at the back of her hair (never hanging over the shoulder or chest), bangles. The styling must not change her face shape, "
               "eyes, nose or jawline at all."),
-    "satyam": ("He is NOT styled: the same plain banian or faded T-shirt and lungi, bald head shining under the light, moustache, "
-               "belly showing, dancing with full enthusiasm but stiff awkward steps, the total opposite of her glamour."),
+    "satyam": ("He is NOT styled: a plain cotton shirt tucked into loose formal trousers with the belt above his belly, bald head shining under the light, moustache, "
+               "a slight paunch, dancing with full enthusiasm but stiff awkward steps, the total opposite of her glamour."),
 }
 NEG = ("Photograph, not illustration. Realistic skin pores, no airbrushing, no beauty filter, no doll face, no extra fingers, "
        "no text, no captions, no stickers, no logos, no watermark.")
@@ -86,6 +85,10 @@ LIGHT = {"evening": "evening, the room lit by the warm LED cove light and a lamp
 
 
 def set_plate(name):
+    """Real photo of their house first (sets/real/plates, shot by Pradeep 4 Nov), AI plate only as a fallback."""
+    real = ROOT / "sets" / "real" / "plates" / f"{name}.jpg"
+    if real.exists():
+        return real
     p = ROOT / "sets" / f"{name}.png"
     if not p.exists():
         raise SystemExit(f"set plate missing: {p}  (python make_sets.py {name})")
@@ -109,3 +112,121 @@ LIGHT_MATCH = ("She is lit ONLY by this room's own light, exactly like the room:
 CAMERA_MATCH = ("Re-photograph the room from where the phone stands in the LAST image: the same camera height, the same distance to the dancer "
                 "and the same lens, so the room appears at the scale it really would behind a person at that distance (closer framing = less "
                 "room, larger, slightly soft). Never paste her in front of a far-away wide room view.")
+
+
+# ---- Padma's wardrobe by time of day (Pradeep, 4 Nov: "why same costume daily, morning she might be in night dresses") ----
+# Every reel picks its outfit from the slot it is set in; out/wardrobe_log.json keeps the last picks so a garment+colour is not
+# repeated within 7 reels, and the two nightwear styles alternate. Nightwear stays bold but recommendable: fitted, never lingerie, never western.
+# Pradeep, 5 Nov: jasmine strands hanging at her side flicker/vanish in Kling video (Nadakallo reel deleted): pin it at the back only.
+# Pradeep, 5 Nov: NO WESTERN DRESSES for Padma (the satin night suit did not suit her). Nightwear = deep-neck nighty only;
+# otherwise sarees (cleavage / deep-neck blouse), half-sarees, churidars. No jeans, kurti-jeans, night suits, gowns or tops.
+WARDROBE = {
+    "morning": [   # coffee, kitchen, waking ayana up: a slightly deep-neck nighty, two cuts so it is not the same daily
+        ("nighty", "a fitted full-length printed cotton nighty with short sleeves and a slightly deep V neckline (front button placket, top button open), a thin dupatta loosely over one shoulder, hair loose or in a quick messy bun, small bindi, mangalsutra and glass bangles"),
+        ("nighty yoke", "a soft fitted full-length cotton nighty with a lace-trimmed deep round yoke neckline and puff sleeves, shaped at the waist, hair in a loose messy bun with a few strands on her face, small bindi, mangalsutra and glass bangles"),
+    ],
+    "late_morning": [  # housework, tailoring
+        ("cotton saree", "a simple cotton saree draped practically with the pallu tucked at the waist so the waist shows, deep-neck elbow-sleeve cotton blouse, hair tied in a plait"),
+        ("churidar", "a fitted cotton churidar kurta with a deep round neck and churidar pants, dupatta around the neck, hair in a plait"),
+    ],
+    "evening": [   # getting ready, functions, dance reels: the bold glam look
+        ("silk saree", "a silk saree draped low on the hips with the waist showing, sleeveless deep-V blouse with natural cleavage, a small jasmine string pinned at the back of her hair (never hanging over the shoulder or chest), gold jhumkas"),
+        ("chiffon saree", "a light chiffon saree draped low on the hips with the waist showing, deep sweetheart-neck blouse with natural cleavage, a small jasmine string pinned at the back of her hair (never hanging over the shoulder or chest), bangles"),
+        ("half saree", "a silk half-saree (langa voni) with the bare waist showing between blouse and skirt, deep-neck blouse, a small jasmine string pinned at the back of her hair (never hanging over the shoulder or chest)"),
+    ],
+    "out": [       # shopping, market, outings (Indian wear only)
+        ("printed saree", "a printed georgette saree draped neatly with the waist showing, deep-neck blouse, small earrings, handbag, hair in a plait"),
+        ("anarkali", "a fitted anarkali churidar with a deep neck and a light dupatta, jhumkas, hair open"),
+    ],
+    "night": [     # bed-time chit-chat
+        ("nighty", "a soft printed cotton nighty with a slightly deep neckline and short sleeves, hair open, mangalsutra only"),
+        ("nighty yoke", "a fitted cotton nighty with a lace-trimmed deep yoke neckline, hair open, mangalsutra only"),
+    ],
+}
+COLOURS = ["peach", "sky blue", "maroon", "mint green", "lavender", "mustard yellow", "rani pink", "navy blue", "emerald green",
+           "cream", "red", "teal", "wine", "orange", "lilac", "black", "white with small flowers", "royal blue"]
+WARDROBE_LOG = ROOT / "out" / "wardrobe_log.json"
+
+
+def choose_look(slot, note=""):
+    """Pick an outfit for this slot that was not worn in the last 7 reels (garment+colour), alternating styles; logs the pick."""
+    log = json.load(open(WARDROBE_LOG)) if WARDROBE_LOG.exists() else []
+    recent = log[-7:]
+    used = {(e["garment"], e["colour"]) for e in recent}
+    last_style = next((e["garment"] for e in reversed(log) if e["slot"] == slot), None)
+    options = WARDROBE[slot]
+    order = [o for o in options if o[0] != last_style] + [o for o in options if o[0] == last_style]
+    recent_colours = [e["colour"] for e in recent]
+    for garment, desc in order:
+        for colour in sorted(COLOURS, key=lambda c: (c in recent_colours, COLOURS.index(c))):
+            if (garment, colour) not in used:
+                look = f"{colour} {desc}"
+                log.append({"date": __import__("time").strftime("%Y-%m-%d %H:%M"), "slot": slot, "garment": garment, "colour": colour, "note": note})
+                WARDROBE_LOG.parent.mkdir(parents=True, exist_ok=True); json.dump(log, open(WARDROBE_LOG, "w"), indent=1)
+                return look
+    return f"{COLOURS[0]} {options[0][1]}"
+
+
+# ---- REAL backgrounds (Pradeep 4 Nov: AI rooms "look purely AI"; he shot their actual house into sets/real) ----
+# Rooms now: hall_a hall_b hall_tv hall_sofa hall_window kitchen_a kitchen_b kitchen_c bedroom_a bedroom_b bedroom_c balcony_a balcony_b door_a door_b
+# (+ <name>_close). It is a house in a gated villa community; all photos are daytime.
+ROOM_REAL = ("is a REAL phone photo of their house, with no people in it. Keep that photo exactly as it is: the same room, furniture, "
+             "floor, curtains, light, perspective, lens distortion and grain (only small loose items may change, as described); do not redraw, tidy, beautify, recolour or re-light it. "
+             "Only add the person into it, standing on that floor at the right size for their distance from the camera, so it looks like the same "
+             "phone photographed them in that room")
+CAMERA_MATCH = ("The camera is the phone that took the room photo: keep its height, lens and perspective. The person is inside the room, "
+                "behind or beside the furniture where natural, at a believable scale, never pasted flat in front of the photo.")
+LIGHT = {k: "lit by the room photo's own daylight exactly as captured (window direction, softness, colour), nothing added" for k in LIGHT}
+
+
+def is_real(plate):
+    return "/real/" in str(plate).replace("\\", "/")
+
+
+# ---- Variety inside the real rooms (Pradeep 4 Nov: "kitchen photo has cut vegetables; if every kitchen reel shows them people will doubt") ----
+# Fixed: walls, cabinets, stove, furniture, windows, floor. Variable per reel: small loose items, chosen by scene; views rotate.
+VIEWS = {"kitchen": ["kitchen_a", "kitchen_b", "kitchen_c"], "hall": ["hall_a", "hall_b", "hall_tv", "hall_sofa", "hall_window"],
+         "bedroom": ["bedroom_a", "bedroom_b", "bedroom_c"], "balcony": ["balcony_a", "balcony_b"], "door": ["door_a", "door_b"]}
+LOOSE = {
+    "kitchen": {"morning": ["a milk packet, a steel davara-tumbler set and a small sugar tin on a clean counter",
+                            "a steel kettle, two tea cups and a plate of rusk biscuits, the counter otherwise clear",
+                            "a filter-coffee filter, a steel tumbler and the morning newspaper folded on the counter"],
+                "late_morning": ["a pressure cooker, a bowl of washed rice and a few curry leaves on the counter",
+                                 "a cutting board with green beans and a knife, a steel bowl of potatoes",
+                                 "steel containers of dal and spices with a ladle, the counter wiped clean"],
+                "evening": ["a plate of hot mirchi bajji and two cups of tea", "a steel plate of upma and a water bottle",
+                            "a clean empty counter with just a fruit basket"],
+                "night": ["washed vessels drying in a steel rack, the counter wiped and empty", "a covered casserole and two plates"]},
+    "hall": {"*": ["a folded newspaper and the TV remote on the sofa", "a couple of cushions out of place and a phone charger cable",
+                   "a steel tumbler and a plate on the side table", "nothing extra, the hall tidy"]},
+    "bedroom": {"*": ["a folded saree and a blouse laid on the bed", "a few clothes on the bed waiting to be folded",
+                      "the bedsheet neatly made, a phone and charger on the pillow", "a handbag and a jewellery box on the bed"]},
+    "balcony": {"*": ["a few clothes drying on a stand", "a tulasi pot and a watering can", "nothing extra"]},
+    "door": {"*": ["a pair of chappals and an office bag by the door", "a milk packet and a newspaper at the door", "nothing extra"]},
+}
+ROOM_LOG = ROOT / "out" / "room_log.json"
+
+
+def room_kind(view):
+    return view.split("_")[0]
+
+
+def choose_room(kind, slot, note=""):
+    """Pick a view of this room not used recently, and a set of loose items for the scene. Returns (view, loose_text) and logs it."""
+    import time as _t
+    log = json.load(open(ROOM_LOG)) if ROOM_LOG.exists() else []
+    recent = [e["view"] for e in log[-6:]]
+    views = sorted(VIEWS[kind], key=lambda v: (v in recent, recent[::-1].index(v) if v in recent else 0))
+    view = views[0]
+    pool = LOOSE[kind].get(slot) or LOOSE[kind].get("*") or LOOSE[kind][next(iter(LOOSE[kind]))]
+    used = [e["loose"] for e in log[-8:]]
+    loose = next((x for x in pool if x not in used), pool[0])
+    log.append({"date": _t.strftime("%Y-%m-%d %H:%M"), "view": view, "slot": slot, "loose": loose, "note": note})
+    ROOM_LOG.parent.mkdir(parents=True, exist_ok=True); json.dump(log, open(ROOM_LOG, "w"), indent=1)
+    return view, loose
+
+
+def loose_txt(loose):
+    return (f"Small loose everyday items on the counters, tables or bed are NOT fixed: remove whatever loose items are in the room photo "
+            f"(cut vegetables, vessels, bottles, packets, clothes) and show instead: {loose}. Everything fixed (walls, cabinets, stove, "
+            f"furniture, windows, floor, curtains) stays exactly as in the photo.")

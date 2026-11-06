@@ -22,6 +22,8 @@ PRICES = {
     "wavespeed-ai/wan-2.2/animate-2":                    ("second", 0.040),  # WaveSpeed 480p (720p 0.08), whole seconds of driving video
     "wavespeed-ai/scail-2":                              ("second", 0.040),  # WaveSpeed 480p (720p 0.08)
     "wavespeed-ai/steadydancer":                         ("second", 0.040),  # WaveSpeed 480p (720p 0.08)
+    "fal-ai/bytedance/omnihuman/v1.5":                  ("second", 0.160),  # fal list 4 Nov 2026 (billed on audio length)
+    "fal-ai/sync-lipsync/v2/pro":                        ("second", 0.0833), # $5/min, fal list 4 Nov 2026
     "bytedance/dreamactor-v2":                           ("second", 0.050),  # WaveSpeed, any resolution, max 30 s
 }
 WAN_RES = {"480p": 0.04, "580p": 0.06, "720p": 0.08}
@@ -50,3 +52,20 @@ if __name__ == "__main__":
     for r in csv.DictReader(open(LOG)):
         m = r["date"][:7]; tot[m] = tot.get(m, 0) + float(r["usd"])
     for m, v in sorted(tot.items()): print(m, f"${v:.2f}", f"₹{v*USD_INR:.0f}")
+
+# --- Claude API cost (judge, scout), added 5 Nov 2026. List prices per million tokens (platform.claude.com pricing page).
+CLAUDE_PRICES = {"claude-opus-5-5": (4.0, 20.0), "claude-sonnet-5-5": (2.0, 10.0), "claude-haiku-5-5": (0.10, 0.50)}
+def log_claude(resp_json, note=""):
+    try:
+        u = resp_json.get("usage") or {}; m = resp_json.get("model", "claude-opus-5-5")
+        pin, pout = next((v for k, v in CLAUDE_PRICES.items() if m.startswith(k)), (4.0, 20.0))
+        tin = u.get("input_tokens", 0) + u.get("cache_creation_input_tokens", 0) + u.get("cache_read_input_tokens", 0)
+        usd = round(tin / 1e6 * pin + u.get("output_tokens", 0) / 1e6 * pout, 4)
+        LOG.parent.mkdir(parents=True, exist_ok=True); new = not LOG.exists()
+        with LOG.open("a", newline="") as f:
+            w = csv.writer(f)
+            if new: w.writerow(["date", "endpoint", "units", "unit", "usd", "inr", "note"])
+            w.writerow([time.strftime("%Y-%m-%d %H:%M"), f"anthropic/{m}", tin + u.get("output_tokens", 0), "token", usd, round(usd * USD_INR, 1), note])
+        return usd
+    except Exception as ex:
+        print("claude cost log skipped:", ex); return 0.0
